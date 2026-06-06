@@ -201,10 +201,19 @@ button {
   line-height: 1.2;
 }
 .card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
   color: var(--ink-soft);
   font-size: 0.85rem;
   font-weight: 700;
   white-space: nowrap;
+}
+.best-time {
+  color: var(--primary-deep);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 .card-delete {
   position: absolute;
@@ -455,20 +464,23 @@ button {
   justify-content: flex-end;
   gap: clamp(7px, calc(var(--cell) * 0.34), 16px);
 }
+/* Clues have exactly two states:
+   - NOT met  → dark ink (clearly "not grey"). Includes a 0-clue line that
+     wrongly contains filled cells.
+   - met      → grey. The line's filled runs match the clue. */
 .clue-num {
   font-weight: 800;
   font-size: calc(var(--cell) * 0.46);
   line-height: 1.04;
-  color: var(--ink-soft);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
   transition: color 0.2s ease, transform 0.2s ease;
 }
-.clue-zero {
-  opacity: 0.32;
-}
 .row-clue.done .clue-num,
 .col-clue.done .clue-num {
-  color: var(--line-major);
+  /* Met = a clearly readable grey (vs the dark, full-contrast unmet state).
+     --ink-soft keeps the two states legible; --line-major was far too faint. */
+  color: var(--ink-soft);
 }
 .clue-active .clue-num {
   color: var(--primary-deep);
@@ -797,5 +809,456 @@ button.cell {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+.hidden {
+  display: none !important;
+}
+
+/* Round icon buttons (menu tools, in-game rules/settings) */
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-major);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.15rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.icon-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  background: var(--surface-2);
+}
+.icon-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn.small {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   Menu — tools + custom puzzle categories
+   ============================================================ */
+.view.menu {
+  position: relative;
+}
+.menu-tools {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  display: flex;
+  gap: var(--s2);
+  z-index: 5;
+}
+.menu-actions {
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.menu-subsection {
+  margin-top: var(--s4);
+}
+.menu-subsection:first-of-type {
+  margin-top: var(--s3);
+}
+.subsection-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: var(--s3);
+  color: var(--ink-soft);
+}
+.subsection-count {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+/* Edit / delete affordances on custom cards */
+.card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  opacity: 0.45;
+  transition: opacity 0.12s ease;
+}
+.puzzle-card:hover .card-actions,
+.puzzle-card:focus-within .card-actions,
+.card-actions:focus-within {
+  opacity: 1;
+}
+.card-action {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-radius: var(--r-sm);
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.card-action:hover {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+.card-action:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+.delete-hint {
+  display: none;
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--mistake);
+}
+.puzzle-card.confirm-delete {
+  border-color: var(--mistake);
+  box-shadow: 0 0 0 2px rgba(239, 111, 111, 0.35), var(--shadow);
+}
+.puzzle-card.confirm-delete .delete-hint {
+  display: block;
+}
+.puzzle-card.confirm-delete .card-action.danger {
+  background: #ffe2dd;
+}
+
+/* ============================================================
+   Play header tools
+   ============================================================ */
+.play-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  justify-content: flex-end;
+  min-width: 84px;
+}
+.timer-wrap.hidden {
+  display: none;
+}
+
+/* ============================================================
+   Modal (rules + settings)
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(16, 60, 64, 0.34);
+  backdrop-filter: blur(5px);
+  z-index: 60;
+  padding: var(--s3);
+  animation: fade 0.16s ease;
+}
+.modal-card {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--s4);
+  max-width: 460px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  animation: rise 0.26s ease;
+}
+.modal-title {
+  font-size: 1.5rem;
+  margin-bottom: var(--s3);
+  padding-right: var(--s4);
+}
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 1rem;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.modal-close:hover {
+  background: var(--mistake);
+  color: #fff;
+  transform: rotate(90deg);
+}
+.modal-close:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* rules body */
+.rules-body p {
+  color: var(--ink);
+  line-height: 1.55;
+  margin: 0 0 var(--s2);
+}
+.rules-body ul {
+  margin: 0 0 var(--s2);
+  padding-left: 1.2em;
+  line-height: 1.7;
+}
+.rules-body code {
+  background: var(--surface-2);
+  padding: 1px 7px;
+  border-radius: var(--r-xs);
+  font-weight: 800;
+  color: var(--primary-deep);
+}
+
+/* ============================================================
+   Settings
+   ============================================================ */
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting-row:last-child {
+  border-bottom: none;
+}
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setting-label {
+  font-weight: 800;
+}
+.setting-desc {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  border: none;
+  background: var(--line-major);
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.switch.on {
+  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+}
+.switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.16s ease;
+}
+.switch.on .switch-knob {
+  transform: translateX(22px);
+}
+.switch:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* danger zone */
+.danger-zone {
+  margin-top: var(--s3);
+  padding: var(--s3);
+  border: 1.5px dashed var(--mistake);
+  border-radius: var(--r);
+  background: #fff5f4;
+}
+.danger-zone h3 {
+  color: var(--mistake);
+  font-size: 1.05rem;
+  margin-bottom: var(--s1);
+}
+.danger-desc {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin: 0 0 var(--s2);
+}
+.danger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+.confirm-text {
+  font-weight: 800;
+  color: var(--mistake);
+}
+.btn.danger {
+  background: var(--mistake);
+  color: #fff;
+  border-color: transparent;
+}
+.btn.danger:hover:not(:disabled) {
+  background: #e15a5a;
+}
+
+/* ============================================================
+   Win overlay — close + share
+   ============================================================ */
+.win-card {
+  position: relative;
+}
+.win-card .modal-close {
+  top: 10px;
+  right: 10px;
+}
+
+/* ============================================================
+   Tutorial
+   ============================================================ */
+.view.tutorial {
+  max-width: 720px;
+}
+.tut-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s3);
+}
+.brand.small {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.brand.small .logo {
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.brand.small h1 {
+  font-size: 1.4rem;
+  color: var(--ink);
+}
+.tut-skip {
+  color: var(--ink-soft);
+}
+.tut-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  align-items: center;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: var(--s3) var(--s4);
+  margin-top: var(--s3);
+  box-shadow: var(--shadow);
+  border: 1.5px solid var(--accent-soft);
+}
+.tut-text {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.cell.tut-target {
+  box-shadow: inset 0 0 0 3px var(--accent);
+  animation: hintpulse 1.1s ease infinite;
+  z-index: 2;
+}
+.cell.tut-target:not(.filled):not(.cross) {
+  background: var(--accent-soft);
+}
+
+/* ============================================================
+   Editor — uniqueness guidance
+   ============================================================ */
+.verdict-guidance {
+  max-width: 560px;
+  margin: var(--s2) auto 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  background: #fff8ef;
+  border: 1.5px solid #f1d9b8;
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+}
+.cell.ambiguous {
+  box-shadow: inset 0 0 0 3px #e0962f;
+  animation: hintpulse 1s ease infinite;
+  z-index: 2;
+}
+.cell.ambiguous:not(.filled) {
+  background: #ffe9c9;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .menu-tools {
+    top: var(--s2);
+    right: var(--s2);
+  }
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .modal-card {
+    padding: var(--s3);
+  }
+  .play-tools {
+    min-width: 0;
   }
 }

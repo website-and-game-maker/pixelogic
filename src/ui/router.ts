@@ -2,12 +2,14 @@ import type { Puzzle } from "../engine/types";
 import { cluesForGrid } from "../engine/clues";
 import { analyzeGrid } from "../engine/generator";
 import { getPuzzle, LIBRARY } from "../engine/puzzles";
-import { loadSave } from "./persistence";
+import { loadSave, isTutorialSeen } from "./persistence";
 import { decodePuzzle } from "./shareCodec";
 import { renderMenu } from "./views/menu";
 import { renderPlay } from "./views/play";
 import { renderEditor } from "./views/editor";
 import { renderExplainer } from "./views/explainer";
+import { renderTutorial } from "./views/tutorial";
+import { getEditorDraft } from "./editorDraft";
 
 type Cleanup = () => void;
 
@@ -57,20 +59,55 @@ function render(): void {
 
   const raw = location.hash.replace(/^#/, "") || "/";
   const segments = raw.split("/").filter(Boolean);
-  const [route, arg] = segments;
+  const [route, arg, arg2] = segments;
+
+  // First run: show the tutorial before the menu.
+  if (!route && !isTutorialSeen()) {
+    currentCleanup = renderTutorial(host);
+    return;
+  }
 
   if (!route) {
     renderMenu(host);
     return;
   }
-  if (route === "editor") {
-    currentCleanup = renderEditor(host);
+  if (route === "tutorial") {
+    currentCleanup = renderTutorial(host);
     return;
+  }
+  if (route === "editor") {
+    if (arg === "draft") {
+      const draft = getEditorDraft();
+      currentCleanup = renderEditor(host, draft ? { restore: draft } : undefined);
+    } else if (arg) {
+      currentCleanup = renderEditor(host, { editId: decodeURIComponent(arg) });
+    } else {
+      currentCleanup = renderEditor(host);
+    }
+    return;
+  }
+  if (route === "test") {
+    const draft = getEditorDraft();
+    if (draft) {
+      const { rowClues, colClues } = cluesForGrid(draft.solution);
+      const puzzle: Puzzle = {
+        id: "draft",
+        title: draft.title || "Your puzzle",
+        width: draft.solution[0].length,
+        height: draft.solution.length,
+        solution: draft.solution,
+        rowClues,
+        colClues,
+        difficulty: analyzeGrid(draft.solution).difficulty,
+      };
+      currentCleanup = renderPlay(host, puzzle, { fromLibrary: false, testReturn: "/editor/draft" });
+      return;
+    }
   }
   if (route === "play" && arg) {
     const found = findPuzzle(decodeURIComponent(arg));
     if (found) {
-      currentCleanup = renderPlay(host, found.puzzle, found.fromLibrary);
+      currentCleanup = renderPlay(host, found.puzzle, { fromLibrary: found.fromLibrary });
       return;
     }
   }
@@ -82,9 +119,11 @@ function render(): void {
     }
   }
   if (route === "p" && arg) {
-    const puzzle = puzzleFromToken(arg);
+    // tokens can contain characters that survived the slash-split; rejoin.
+    const token = arg2 ? `${arg}/${arg2}` : arg;
+    const puzzle = puzzleFromToken(token);
     if (puzzle) {
-      currentCleanup = renderPlay(host, puzzle, false);
+      currentCleanup = renderPlay(host, puzzle, { fromLibrary: false });
       return;
     }
   }

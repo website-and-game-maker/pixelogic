@@ -4,6 +4,8 @@ import {
   writeSave,
   recordProgress,
   markCompleted,
+  recordBestTime,
+  getBestTime,
   saveUserPuzzle,
   deleteUserPuzzle,
   setSettings,
@@ -92,20 +94,39 @@ describe("persistence", () => {
     expect(isTutorialSeen(s)).toBe(true);
   });
 
-  it("resetProgress clears completion/progress but keeps custom puzzles and settings", () => {
+  it("resetProgress clears completion/progress/best times but keeps custom puzzles and settings", () => {
     const s = memStore();
     const { puzzle } = puzzleFromBitmap(["#.", ".#"], "Mine", "mine");
     saveUserPuzzle(puzzle, s);
     setSettings({ mistakeCheck: true }, s);
     recordProgress({ puzzleId: "heart", marks: [[FILLED]], elapsedMs: 5 }, s);
     markCompleted("smiley", s);
+    recordBestTime("smiley", 4200, s);
 
     resetProgress(s);
 
     const data = loadSave(s);
     expect(data.completed).toEqual([]);
     expect(data.progress).toEqual({});
+    expect(data.bestTimes).toEqual({});
     expect(data.userPuzzles).toHaveLength(1); // kept
     expect(data.settings.mistakeCheck).toBe(true); // kept
+  });
+
+  it("records only the fastest best time and reports new records", () => {
+    const s = memStore();
+    expect(getBestTime("heart", s)).toBeUndefined();
+
+    const first = recordBestTime("heart", 9000, s);
+    expect(first).toEqual({ best: 9000, isNew: true });
+    expect(getBestTime("heart", s)).toBe(9000);
+
+    const slower = recordBestTime("heart", 12000, s);
+    expect(slower).toEqual({ best: 9000, isNew: false }); // not improved
+    expect(getBestTime("heart", s)).toBe(9000);
+
+    const faster = recordBestTime("heart", 7000, s);
+    expect(faster).toEqual({ best: 7000, isNew: true });
+    expect(getBestTime("heart", s)).toBe(7000);
   });
 });

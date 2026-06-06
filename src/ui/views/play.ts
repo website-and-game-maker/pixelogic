@@ -1,25 +1,39 @@
 import { UNKNOWN, FILLED, EMPTY, type Puzzle } from "../../engine/types";
 import { GameState } from "../gameState";
-import { createBoard, playWinReveal, type CellView } from "../render";
+import { createBoard, playWinReveal, type CellView, type BoardConfig } from "../render";
 import { attachInput } from "../input";
 import { nextHint } from "../hints";
 import { el, mount } from "../dom";
 import { formatTime, difficultyMeta, sizeLabel } from "../format";
 import {
   loadSave,
+  getSettings,
   recordProgress,
   clearProgress,
   markCompleted,
+  recordBestTime,
   setSettings,
 } from "../persistence";
+import { openSettings, openRules } from "../settings";
+import { puzzleLink, shareResult } from "../share";
 import { navigate } from "../router";
 import { LIBRARY } from "../../engine/puzzles";
 
 type Cleanup = () => void;
 
-/** Render the play view for a puzzle. `library` indicates a built-in puzzle
- *  (enables "next" + completion tracking by id). */
-export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boolean): Cleanup {
+export interface PlayOptions {
+  /** Built-in puzzle: enables completion tracking + "next puzzle". */
+  fromLibrary: boolean;
+  /** Set when test-playing an editor draft. Back/overlay return here (not Menu). */
+  testReturn?: string;
+}
+
+/** Render the play view for a puzzle. */
+export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions): Cleanup {
+  const { fromLibrary, testReturn } = opts;
+  const isTest = !!testReturn;
+  const isCustomSaved = !fromLibrary && puzzle.id.startsWith("u-");
+
   const save = loadSave();
   const saved = save.progress[puzzle.id];
   const state = new GameState(
@@ -27,7 +41,8 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
     fromLibrary && saved ? saved.marks : undefined,
     fromLibrary && saved ? saved.elapsedMs : 0,
   );
-  let mistakeCheck = save.settings.mistakeCheck;
+  let settings = save.settings;
+  let mistakeCheck = settings.mistakeCheck;
   let solved = false;
   let revealed = false;
   let saveTimer: number | null = null;
@@ -35,36 +50,61 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
   const cellView = (r: number, c: number): CellView =>
     state.marks[r][c] === FILLED ? "filled" : state.marks[r][c] === EMPTY ? "cross" : "empty";
 
-  const board = createBoard({
+  // The config object is captured by the board and re-read on every refresh, so
+  // mutating its fields (e.g. when settings change) takes effect on refresh().
+  const boardConfig: BoardConfig = {
     width: puzzle.width,
     height: puzzle.height,
     rowClues: puzzle.rowClues,
     colClues: puzzle.colClues,
     getCell: cellView,
     isMistake: (r, c) => mistakeCheck && state.marks[r][c] === FILLED && !puzzle.solution[r][c],
-    dimSatisfied: true,
+    dimSatisfied: settings.highlightClues,
     interactive: true,
     gridLabel: `${puzzle.title} — ${puzzle.height} by ${puzzle.width} nonogram grid`,
-  });
-
+  };
+  const board = createBoard(boardConfig);
   const detachInput = attachInput(board, state);
 
   // ---- header ----
   const meta = difficultyMeta(puzzle.difficulty);
   const timerEl = el("span", { class: "timer", text: formatTime(state.elapsedMs()) });
+  const timerWrap = el("div", { class: "timer-wrap" }, [timerEl]);
+
+  const rulesBtn = el("button", {
+    class: "icon-btn",
+    text: "❔",
+    attrs: { type: "button", "aria-label": "How to play", title: "How to play" },
+    on: { click: () => openRules() },
+  });
+  const settingsBtn = el("button", {
+    class: "icon-btn",
+    text: "⚙",
+    attrs: { type: "button", "aria-label": "Game settings", title: "Settings" },
+    on: { click: () => openSettings("game", applySettings) },
+  });
+
+  const backLabel = isTest ? "‹ Editor" : "‹ Menu";
+  const backBtn = el("button", {
+    class: "btn ghost back-btn",
+    text: backLabel,
+    on: { click: goBack },
+  });
+
   const header = el("header", { class: "play-header" }, [
-    el("button", { class: "btn ghost back-btn", text: "‹ Menu", on: { click: () => navigate("/") } }),
+    backBtn,
     el("div", { class: "play-title" }, [
       el("h1", { text: puzzle.title }),
       el("div", { class: "play-sub" }, [
         el("span", { class: `chip ${meta.className}`, text: meta.label }),
         el("span", { class: "chip muted", text: sizeLabel(puzzle.width, puzzle.height) }),
+        isTest ? el("span", { class: "chip muted", text: "Test play" }) : null,
       ]),
     ]),
-    el("div", { class: "timer-wrap" }, [timerEl]),
+    el("div", { class: "play-tools" }, [rulesBtn, settingsBtn, timerWrap]),
   ]);
 
-  // ---- banner (hints / messages) ----
+  // ---- banner (hints / messages / share) ----
   const banner = el("div", { class: "banner", attrs: { role: "status", "aria-live": "polite" } });
 
   // ---- controls ----
@@ -121,27 +161,25 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
   ]);
 
   // ---- win overlay ----
-  const winTime = el("p", { class: "win-time" });
+  const winEmoji = el("div", { class: "win-emoji", text: "🎉" });
   const winHeading = el("h2", { text: "Solved!" });
+  const winTime = el("p", { class: "win-time" });
+  const winActions = el("div", { class: "win-actions" });
+  const winClose = el("button", {
+    class: "modal-close",
+    text: "✕",
+    attrs: { type: "button", "aria-label": "Close and admire the picture" },
+    on: { click: closeWinOverlay },
+  });
+  const winCard = el("div", { class: "win-card" }, [winClose, winEmoji, winHeading, winTime, winActions]);
   const winOverlay = el(
     "div",
     {
       class: "win-overlay hidden",
       attrs: { role: "dialog", "aria-modal": "true", "aria-label": "Puzzle solved" },
     },
-    [
-    el("div", { class: "win-card" }, [
-      el("div", { class: "win-emoji", text: "🎉" }),
-      winHeading,
-      winTime,
-      el("div", { class: "win-actions" }, [
-        el("button", { class: "btn primary", text: "Menu", on: { click: () => navigate("/") } }),
-        fromLibrary
-          ? el("button", { class: "btn", text: "Next puzzle →", on: { click: goNext } })
-          : el("button", { class: "btn", text: "Edit more", on: { click: () => navigate("/editor") } }),
-      ]),
-    ]),
-  ]);
+    [winCard],
+  );
 
   const layout = el("div", { class: "view play" }, [
     header,
@@ -153,6 +191,19 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
   mount(host, layout);
 
   // ---- behaviour ----
+  function goBack(): void {
+    navigate(isTest ? testReturn! : "/");
+  }
+
+  function applySettings(): void {
+    settings = getSettings();
+    mistakeCheck = settings.mistakeCheck;
+    mistakeBtn.classList.toggle("on", mistakeCheck);
+    boardConfig.dimSatisfied = settings.highlightClues;
+    timerWrap.classList.toggle("hidden", !settings.showTimer);
+    board.refresh();
+  }
+
   function refreshControls(): void {
     undoBtn.toggleAttribute("disabled", !state.canUndo());
     redoBtn.toggleAttribute("disabled", !state.canRedo());
@@ -233,6 +284,46 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
     state.start();
   }
 
+  function buildWinActions(): void {
+    winActions.replaceChildren();
+    const shareBtn = el("button", {
+      class: "btn",
+      text: "🔗 Share",
+      on: { click: () => doShare(shareBtn) },
+    });
+
+    if (isTest) {
+      winActions.append(
+        el("button", {
+          class: "btn primary",
+          text: "‹ Back to editor",
+          on: { click: () => navigate(testReturn!) },
+        }),
+        el("button", { class: "btn ghost", text: "Admire", on: { click: closeWinOverlay } }),
+      );
+      return;
+    }
+
+    if (!revealed) winActions.append(shareBtn);
+
+    if (fromLibrary) {
+      winActions.append(
+        el("button", { class: "btn primary", text: "Next puzzle →", on: { click: goNext } }),
+      );
+    } else if (isCustomSaved) {
+      winActions.append(
+        el("button", {
+          class: "btn primary",
+          text: "✏️ Edit",
+          on: { click: () => navigate(`/editor/${encodeURIComponent(puzzle.id)}`) },
+        }),
+      );
+    }
+    winActions.append(
+      el("button", { class: "btn ghost", text: "Menu", on: { click: () => navigate("/") } }),
+    );
+  }
+
   function handleWin(): void {
     solved = true;
     state.pause();
@@ -240,14 +331,91 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
     // Revealing the answer doesn't count as solving it.
     if (fromLibrary && !revealed) markCompleted(puzzle.id);
     playWinReveal(board);
-    winTime.textContent = revealed
-      ? "Revealed"
-      : `Time: ${formatTime(state.elapsedMs())}`;
+    const elapsed = state.elapsedMs();
+    if (revealed) {
+      winTime.textContent = "Revealed";
+    } else if (fromLibrary) {
+      const { best, isNew } = recordBestTime(puzzle.id, elapsed);
+      winTime.textContent = isNew
+        ? `🏅 New best — ${formatTime(elapsed)}`
+        : `Time ${formatTime(elapsed)} · Best ${formatTime(best)}`;
+    } else {
+      winTime.textContent = `Time: ${formatTime(elapsed)}`;
+    }
     winHeading.textContent = revealed ? "Revealed" : "Solved!";
+    winEmoji.textContent = revealed ? "🧩" : "🎉";
+    // Keep the accessible names honest on the reveal path.
+    winOverlay.setAttribute("aria-label", revealed ? "Solution revealed" : "Puzzle solved");
+    winClose.setAttribute("aria-label", revealed ? "Close" : "Close and admire the picture");
+    buildWinActions();
     window.setTimeout(() => {
       winOverlay.classList.remove("hidden");
-      (winOverlay.querySelector(".btn") as HTMLElement | null)?.focus();
+      (winOverlay.querySelector(".win-actions .btn") as HTMLElement | null)?.focus();
     }, 650);
+  }
+
+  /** Esc closes the win dialog; Tab is trapped inside the card. */
+  function onWinKey(e: KeyboardEvent): void {
+    if (winOverlay.classList.contains("hidden")) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeWinOverlay();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const f = Array.from(
+      winCard.querySelectorAll<HTMLElement>('button, [tabindex]:not([tabindex="-1"])'),
+    ).filter((n) => !n.hasAttribute("disabled") && n.offsetParent !== null);
+    if (f.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = f[0];
+    const last = f[f.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!winCard.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+  document.addEventListener("keydown", onWinKey);
+
+  /** Close the win popup to admire the finished picture; leave a share affordance. */
+  function closeWinOverlay(): void {
+    winOverlay.classList.add("hidden");
+    banner.replaceChildren();
+    if (revealed) {
+      banner.textContent = "Revealed — try the next one!";
+    } else {
+      const msg = el("span", { text: `🎉 Solved in ${formatTime(state.elapsedMs())}. ` });
+      const shareBtn = el("button", {
+        class: "btn small",
+        text: "🔗 Share result",
+        on: { click: () => doShare(shareBtn) },
+      });
+      banner.append(msg, shareBtn);
+    }
+    // Always return focus to a stable, visible control (not the hidden ✕).
+    backBtn.focus();
+  }
+
+  async function doShare(btn: HTMLElement): Promise<void> {
+    const url = puzzleLink(puzzle, fromLibrary);
+    const text = `I solved “${puzzle.title}” on Pixelogic in ${formatTime(state.elapsedMs())}! ▦ Can you?`;
+    const outcome = await shareResult(text, url);
+    if (outcome === "copied") {
+      const old = btn.textContent;
+      btn.textContent = "✓ Link copied!";
+      window.setTimeout(() => (btn.textContent = old), 1800);
+    } else if (outcome === "failed") {
+      banner.textContent = "Couldn't open share — copy the link from the address bar.";
+    }
   }
 
   function goNext(): void {
@@ -257,6 +425,7 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
   }
 
   // timer tick
+  applySettings();
   state.start();
   refreshControls();
   const tick = window.setInterval(() => {
@@ -265,6 +434,7 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, fromLibrary: boole
 
   return () => {
     window.clearInterval(tick);
+    document.removeEventListener("keydown", onWinKey);
     state.pause();
     flushSave();
     detachInput();

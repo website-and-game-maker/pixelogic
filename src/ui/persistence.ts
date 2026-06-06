@@ -22,6 +22,8 @@ export interface SaveData {
   version: 1;
   progress: Record<string, Progress>;
   completed: string[];
+  /** Fastest solve time (ms) per puzzle id. */
+  bestTimes: Record<string, number>;
   userPuzzles: Puzzle[];
   settings: Settings;
   tutorialSeen: boolean;
@@ -34,6 +36,7 @@ export function defaultSaveData(): SaveData {
     version: 1,
     progress: {},
     completed: [],
+    bestTimes: {},
     userPuzzles: [],
     settings: { mistakeCheck: false, showTimer: true, highlightClues: true },
     tutorialSeen: false,
@@ -78,6 +81,10 @@ export function loadSave(storage: StorageLike = getStorage()): SaveData {
       version: 1,
       progress: parsed.progress ?? base.progress,
       completed: Array.isArray(parsed.completed) ? parsed.completed : base.completed,
+      bestTimes:
+        parsed.bestTimes && typeof parsed.bestTimes === "object"
+          ? (parsed.bestTimes as Record<string, number>)
+          : base.bestTimes,
       userPuzzles: Array.isArray(parsed.userPuzzles) ? parsed.userPuzzles : base.userPuzzles,
       settings: { ...base.settings, ...(parsed.settings ?? {}) },
       tutorialSeen: parsed.tutorialSeen === true,
@@ -112,6 +119,28 @@ export function markCompleted(id: string, storage: StorageLike = getStorage()): 
   if (!data.completed.includes(id)) data.completed.push(id);
   delete data.progress[id];
   writeSave(data, storage);
+}
+
+/** Record a solve time, keeping only the fastest. Returns the best time and
+ *  whether this solve set a new record. */
+export function recordBestTime(
+  id: string,
+  elapsedMs: number,
+  storage: StorageLike = getStorage(),
+): { best: number; isNew: boolean } {
+  const data = loadSave(storage);
+  const prev = data.bestTimes[id];
+  const isNew = prev === undefined || elapsedMs < prev;
+  if (isNew) {
+    data.bestTimes[id] = elapsedMs;
+    writeSave(data, storage);
+    return { best: elapsedMs, isNew: true };
+  }
+  return { best: prev, isNew: false };
+}
+
+export function getBestTime(id: string, storage: StorageLike = getStorage()): number | undefined {
+  return loadSave(storage).bestTimes[id];
 }
 
 export function saveUserPuzzle(puzzle: Puzzle, storage: StorageLike = getStorage()): void {
@@ -149,10 +178,11 @@ export function setTutorialSeen(seen: boolean, storage: StorageLike = getStorage
   writeSave(data, storage);
 }
 
-/** Danger zone: wipe solved/in-progress state. Keeps custom puzzles and settings. */
+/** Danger zone: wipe solved/in-progress state and records. Keeps custom puzzles and settings. */
 export function resetProgress(storage: StorageLike = getStorage()): void {
   const data = loadSave(storage);
   data.progress = {};
   data.completed = [];
+  data.bestTimes = {};
   writeSave(data, storage);
 }

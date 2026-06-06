@@ -141,6 +141,9 @@ export function createBoard(config: BoardConfig): Board {
         if (config.isMistake) cell.classList.toggle("mistake", config.isMistake(r, c));
       }
     }
+    // Clues have exactly two states: "done" (grey — the line's filled runs match
+    // the clue) and not-done (dark — not yet met, including a 0-clue line that
+    // wrongly has filled cells). When dimming is off, force every clue not-done.
     if (config.dimSatisfied) {
       for (let r = 0; r < height; r++) {
         const filled = Array.from({ length: width }, (_, c) => config.getCell(r, c) === "filled");
@@ -150,6 +153,9 @@ export function createBoard(config: BoardConfig): Board {
         const filled = Array.from({ length: height }, (_, r) => config.getCell(r, c) === "filled");
         colClueEls[c].classList.toggle("done", clueEquals(cluesForLine(filled), colClues[c]));
       }
+    } else {
+      for (const node of rowClueEls) node.classList.remove("done");
+      for (const node of colClueEls) node.classList.remove("done");
     }
   }
 
