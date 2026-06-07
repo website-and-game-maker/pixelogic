@@ -173,6 +173,15 @@ export function renderTutorial(host: HTMLElement): Cleanup {
     board.refresh();
     fillBtn.classList.toggle("active", state.mode === "fill");
     crossBtn.classList.toggle("active", state.mode === "cross");
+    // Robustness: if the player completes the picture by ANY path (e.g. they fill
+    // the whole plus without bothering to cross), celebrate immediately — never
+    // trap them on a scripted sub-step they've effectively already satisfied.
+    if (state.isSolved() && stepIndex < STEPS.length - 1) {
+      highlight(null);
+      stepIndex = STEPS.length - 1;
+      showStep();
+      return;
+    }
     const step = STEPS[stepIndex];
     if (step.kind === "info") return;
     if (stepSatisfied(step)) {

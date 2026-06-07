@@ -15,6 +15,24 @@ export function puzzleLink(puzzle: Puzzle, fromLibrary: boolean): string {
 
 export type ShareOutcome = "shared" | "copied" | "failed";
 
+/** A link to the app itself (the menu). */
+export function appLink(): string {
+  return `${location.origin}${location.pathname}`;
+}
+
+/** Share the player's overall Pixelogic Score, disclosing a progress reset (#16). */
+export function shareScore(opts: {
+  score: number;
+  title: string;
+  solved: number;
+  total: number;
+  wasReset: boolean;
+}): Promise<ShareOutcome> {
+  const resetNote = opts.wasReset ? " (progress was reset at least once)" : "";
+  const text = `My Pixelogic Score is ${opts.score.toLocaleString()}/1600 — ${opts.title} (${opts.solved}/${opts.total} solved)${resetNote}. ▦ Can you beat it?`;
+  return shareResult(text, appLink());
+}
+
 /** Try the native share sheet first (mobile), then fall back to the clipboard. */
 export async function shareResult(text: string, url: string): Promise<ShareOutcome> {
   const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };

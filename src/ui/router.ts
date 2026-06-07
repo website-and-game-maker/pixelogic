@@ -61,9 +61,10 @@ function render(): void {
   const segments = raw.split("/").filter(Boolean);
   const [route, arg, arg2] = segments;
 
-  // First run: show the tutorial before the menu.
+  // First-ever visit (no hash, tutorial never seen): redirect to the tutorial
+  // route. Afterwards the bare URL just shows the menu — no #/ needed (#21).
   if (!route && !isTutorialSeen()) {
-    currentCleanup = renderTutorial(host);
+    navigate("/tutorial");
     return;
   }
 

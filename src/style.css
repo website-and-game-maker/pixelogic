@@ -1484,3 +1484,8 @@ button.cell {
 .btn.small.danger.armed {
   animation: hintpulse 0.8s ease infinite;
 }
+
+/* Share-score button under the laurel header */
+.score-share {
+  margin-top: var(--s2);
+}

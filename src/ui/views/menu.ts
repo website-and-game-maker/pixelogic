@@ -10,8 +10,10 @@ import {
   getBestTime,
   getPuzzleScore,
   getPixelogicScore,
+  wasProgressReset,
 } from "../persistence";
 import { openSettings } from "../settings";
+import { shareScore } from "../share";
 import { navigate } from "../router";
 
 const DIFF_HEADING: Record<Difficulty, string> = {
@@ -236,6 +238,28 @@ export function renderMenu(host: HTMLElement): void {
         ]),
         el("span", { class: "laurel flip", text: "🌿" }),
       ]),
+      el("button", {
+        class: "btn small score-share",
+        text: "🔗 Share score",
+        on: {
+          click: (e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            shareScore({
+              score: pix,
+              title: scoreTitle(pix),
+              solved: completed.size,
+              total: LIBRARY.length,
+              wasReset: wasProgressReset(),
+            }).then((outcome) => {
+              if (outcome === "copied") {
+                const old = btn.textContent;
+                btn.textContent = "✓ Copied!";
+                window.setTimeout(() => (btn.textContent = old), 1800);
+              }
+            });
+          },
+        },
+      }),
       el("p", { class: "tagline", text: progressLine }),
       el("div", { class: "menu-actions" }, [
         el("button", { class: "btn primary", text: "✏️ Create your own", on: { click: () => navigate("/editor") } }),
