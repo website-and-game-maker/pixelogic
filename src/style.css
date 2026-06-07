@@ -22,6 +22,9 @@
   --line: #d2e9e9;
   --line-major: #a4d4d2;
   --mistake: #ef6f6f;
+  --symmetry: #0fb5c4;
+  --symmetry-soft: #d4f4f7;
+  --gold: #e3b23c;
 
   /* radii */
   --r-xs: 6px;
@@ -268,6 +271,15 @@ button {
 .diff-expert {
   background: #ffe2dd;
   color: #c0492f;
+}
+.diff-max {
+  background: linear-gradient(135deg, #2b2140, #4a2d5e);
+  color: #fff;
+  letter-spacing: 0.06em;
+}
+.chip-symmetry {
+  background: var(--symmetry-soft);
+  color: #0b7e89;
 }
 .chip.muted {
   background: var(--surface-2);
@@ -1261,4 +1273,214 @@ button.cell {
   .play-tools {
     min-width: 0;
   }
+}
+
+/* ============================================================
+   v2 — Pixelogic Score, card score/time, symmetry, assists
+   ============================================================ */
+
+/* Pixelogic Score laurel header */
+.pixelogic-score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s3) auto 0;
+  padding: 10px var(--s3);
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  border: 1.5px solid var(--accent-soft);
+}
+.pixelogic-score .laurel {
+  font-size: 2.1rem;
+  line-height: 1;
+  filter: hue-rotate(-12deg) saturate(0.85);
+}
+.pixelogic-score .laurel.flip {
+  transform: scaleX(-1);
+}
+.score-core {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  min-width: 92px;
+}
+.score-value {
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(120deg, var(--gold), #b5862a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.score-cap {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.score-title {
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--primary-deep);
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+/* Card corners: score (left) + time (right) */
+.card-corners {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: 28px;
+}
+.score-pill {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--primary-deep);
+  font-variant-numeric: tabular-nums;
+}
+.score-pill b {
+  font-size: 1.1rem;
+}
+.score-pill i {
+  font-style: normal;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+.score-pill.empty {
+  color: var(--line-major);
+  font-weight: 900;
+}
+.time-pill {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.time-pill.empty {
+  color: var(--primary);
+}
+.card-icon.mini {
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+  border-radius: var(--r-xs);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--primary-deep);
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+  flex-wrap: wrap;
+}
+.card-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.card-size {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* Symmetry strip at the very bottom of a puzzle */
+.symmetry-strip {
+  margin: var(--s4) auto 0;
+  max-width: 560px;
+  text-align: center;
+  font-weight: 800;
+  color: #0b7e89;
+  background: var(--symmetry-soft);
+  border: 1.5px solid var(--symmetry);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+}
+
+/* Assist meter under the controls */
+.assist-meter {
+  flex-basis: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  min-height: 1.2em;
+}
+
+/* Check reveal flash */
+.cell.revealed {
+  box-shadow: inset 0 0 0 3px var(--gold);
+  z-index: 2;
+}
+.board-cells.checking {
+  cursor: crosshair;
+}
+.board-cells.checking .cell:hover {
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+/* Win popup score line */
+.win-score {
+  font-weight: 900;
+  font-size: 1.15rem;
+  color: var(--primary-deep);
+  margin: var(--s1) 0 0;
+}
+
+/* Post-solve bar */
+.controls.post-solve {
+  margin-top: var(--s3);
+}
+
+/* My Puzzles manage / mass delete */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+.section-head .section-title {
+  margin-bottom: 0;
+  flex: 1;
+}
+.manage-bar {
+  display: flex;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  flex-wrap: wrap;
+}
+.card-select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--primary);
+  display: none;
+  z-index: 3;
+  cursor: pointer;
+}
+.my-puzzles.managing .card-select {
+  display: block;
+}
+.my-puzzles.managing .puzzle-card .card-actions {
+  display: none;
+}
+.puzzle-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft), var(--shadow);
+}
+.btn.small.danger.armed {
+  animation: hintpulse 0.8s ease infinite;
 }
