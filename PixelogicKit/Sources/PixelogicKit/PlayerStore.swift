@@ -27,6 +27,22 @@ public struct GameSettings: Codable, Sendable, Equatable {
     public init() {}
 }
 
+/// A player-created puzzle (kept across progress resets, like the web app).
+public struct StoredPuzzle: Codable, Sendable, Identifiable, Equatable {
+    public var id: String
+    public var title: String
+    public var solution: [[Bool]]
+    public init(id: String, title: String, solution: [[Bool]]) {
+        self.id = id
+        self.title = title
+        self.solution = solution
+    }
+
+    public var asPuzzle: Puzzle {
+        Puzzle(id: id, title: title, solution: solution, difficulty: gradeGrid(solution))
+    }
+}
+
 public struct SaveData: Codable, Sendable {
     public var completed: Set<String> = []
     /// Fastest solve time (ms) per puzzle id.
@@ -35,6 +51,8 @@ public struct SaveData: Codable, Sendable {
     public var bestScores: [String: Int] = [:]
     /// Assists used in the current (in-progress) attempt, per puzzle id.
     public var assists: [String: AssistTally] = [:]
+    /// Player-created puzzles.
+    public var userPuzzles: [StoredPuzzle] = []
     public var settings = GameSettings()
     public var tutorialSeen = false
     /// True once progress has ever been wiped — disclosed when sharing a score.
@@ -135,6 +153,27 @@ public final class PlayerStore: @unchecked Sendable {
     public func clearAssists(for id: String) {
         var d = data
         d.assists.removeValue(forKey: id)
+        data = d
+    }
+
+    // MARK: - Custom puzzles
+
+    public var userPuzzles: [StoredPuzzle] { data.userPuzzles }
+
+    /// Insert or update (same id replaces — no accidental duplicates).
+    public func saveUserPuzzle(_ puzzle: StoredPuzzle) {
+        var d = data
+        if let idx = d.userPuzzles.firstIndex(where: { $0.id == puzzle.id }) {
+            d.userPuzzles[idx] = puzzle
+        } else {
+            d.userPuzzles.append(puzzle)
+        }
+        data = d
+    }
+
+    public func deleteUserPuzzles(ids: Set<String>) {
+        var d = data
+        d.userPuzzles.removeAll { ids.contains($0.id) }
         data = d
     }
 
