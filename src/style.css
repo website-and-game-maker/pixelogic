@@ -1502,3 +1502,185 @@ button.cell {
 .win-note:empty {
   display: none;
 }
+
+/* ============================================================
+   v3 — header layout, badges, settings select, About, badge pages
+   ============================================================ */
+
+/* #2: title → tagline → score → actions, buttons near the section divider */
+.menu-header {
+  margin-bottom: var(--s3);
+}
+.tagline {
+  margin: var(--s2) 0 0;
+}
+.score-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  margin: var(--s3) 0;
+}
+.score-share {
+  margin-top: 2px;
+}
+.menu-actions {
+  margin-top: var(--s2);
+  margin-bottom: var(--s2);
+}
+
+/* Badge chips (clickable) */
+.chip-badge {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.chip-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.chip-badge:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 1px;
+}
+.chip-symmetric {
+  background: var(--symmetry-soft);
+  color: #0b7e89;
+}
+.chip-named {
+  background: #fde3ef;
+  color: #b13d7e;
+}
+.chip-patterned {
+  background: #fdeed3;
+  color: #a06b12;
+}
+
+/* Settings <select> */
+.setting-select {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--line-major);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.setting-select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Completed-clue styles (board-level data attribute set by render.ts) */
+.board[data-clue-style="grey"] .row-clue.done .clue-num,
+.board[data-clue-style="grey"] .col-clue.done .clue-num {
+  color: var(--ink-soft);
+}
+.board[data-clue-style="strike"] .row-clue.done .clue-num,
+.board[data-clue-style="strike"] .col-clue.done .clue-num {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.board[data-clue-style="hide"] .row-clue.done .clue-num,
+.board[data-clue-style="hide"] .col-clue.done .clue-num {
+  opacity: 0;
+}
+
+/* Symmetry strip link */
+.strip-link {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 0.9rem;
+  color: #0b7e89;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.strip-link:focus-visible {
+  outline: 2.5px solid var(--accent);
+  border-radius: 4px;
+}
+
+/* Badge filter page */
+.badge-blurb {
+  text-align: center;
+  font-weight: 700;
+  color: var(--ink);
+  max-width: 560px;
+  margin: 0 auto var(--s1);
+  line-height: 1.5;
+}
+.badge-scoring-note {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  max-width: 520px;
+  margin: 0 auto var(--s4);
+}
+.badge-list .section-title .subsection-count {
+  margin-left: 2px;
+}
+
+/* About page — calm editorial cards with a staggered entrance */
+.view.about {
+  max-width: 760px;
+}
+.about-section {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1.5px solid var(--accent-soft);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
+  animation: rise 0.4s ease backwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+}
+.about-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+.about-head h2 {
+  font-size: 1.25rem;
+}
+.about-body p {
+  margin: 0 0 var(--s2);
+  line-height: 1.65;
+  color: var(--ink);
+  font-weight: 600;
+}
+.about-body p:last-child {
+  margin-bottom: 0;
+}
+.about-body ul {
+  margin: 0 0 var(--s2);
+  padding-left: 1.3em;
+  line-height: 1.65;
+  font-weight: 600;
+}
+.about-body em {
+  color: var(--primary-deep);
+  font-style: italic;
+}
+.about-link {
+  margin-top: var(--s1);
+}

@@ -1,22 +1,16 @@
 import type { Puzzle, Difficulty } from "../../engine/types";
 import { LIBRARY, DIFFICULTY_ORDER } from "../../engine/puzzles";
-import { isSymmetric } from "../../engine/symmetry";
+import { puzzleBadges } from "../../engine/badges";
 import { scoreTitle } from "../../engine/scoring";
 import { el, mount } from "../dom";
-import { difficultyMeta, sizeLabel, formatTime } from "../format";
-import {
-  loadSave,
-  deleteUserPuzzle,
-  getBestTime,
-  getPuzzleScore,
-  getPixelogicScore,
-  wasProgressReset,
-} from "../persistence";
+import { difficultyMeta, sizeLabel } from "../format";
+import { libraryCard, badgeChip } from "../cards";
+import { loadSave, deleteUserPuzzle, getPixelogicScore, wasProgressReset } from "../persistence";
 import { openSettings } from "../settings";
 import { shareScore } from "../share";
 import { navigate } from "../router";
 
-const DIFF_HEADING: Record<Difficulty, string> = {
+export const DIFF_HEADING: Record<Difficulty, string> = {
   easy: "Easy",
   medium: "Medium",
   hard: "Hard",
@@ -24,48 +18,11 @@ const DIFF_HEADING: Record<Difficulty, string> = {
   max: "Max",
 };
 
-function symmetricChip(p: Puzzle): HTMLElement | null {
-  return isSymmetric(p.solution)
-    ? el("span", { class: "chip chip-symmetry", text: "◈ Symmetric" })
-    : null;
-}
-
 export function renderMenu(host: HTMLElement): void {
   const save = loadSave();
   const completed = new Set(save.completed);
 
-  // ---- library card: score top-left, best time top-right ----
-  function libraryCard(p: Puzzle): HTMLElement {
-    const meta = difficultyMeta(p.difficulty);
-    const done = completed.has(p.id);
-    const sc = getPuzzleScore(p.id);
-    const best = getBestTime(p.id);
-    return el(
-      "button",
-      {
-        class: `puzzle-card ${done ? "done" : ""}`,
-        attrs: { type: "button", "aria-label": `Play ${p.title}${sc !== undefined ? `, best score ${sc}` : ""}` },
-        on: { click: () => navigate(`/play/${encodeURIComponent(p.id)}`) },
-      },
-      [
-        el("div", { class: "card-corners" }, [
-          sc !== undefined
-            ? el("span", { class: "score-pill", attrs: { title: "Best score" }, html: `<b>${sc}</b><i>/100</i>` })
-            : el("span", { class: "score-pill empty", text: "—" }),
-          best !== undefined
-            ? el("span", { class: "time-pill", text: `⏱ ${formatTime(best)}` })
-            : el("span", { class: "time-pill empty", text: done ? "✓" : "" }),
-        ]),
-        el("span", { class: "card-title", text: p.title }),
-        el("div", { class: "card-foot" }, [
-          el("div", { class: "card-chips" }, [el("span", { class: `chip ${meta.className}`, text: meta.label }), symmetricChip(p)]),
-          el("span", { class: "card-size", text: sizeLabel(p.width, p.height) }),
-        ]),
-      ],
-    );
-  }
-
-  // ---- custom card: editable + deletable, with manage-mode checkbox ----
+  // ---- custom card: playable, editable, deletable, manage-mode selectable ----
   function customCard(p: Puzzle): HTMLElement {
     const meta = difficultyMeta(p.difficulty);
     const card = el(
@@ -92,7 +49,10 @@ export function renderMenu(host: HTMLElement): void {
         ]),
         el("span", { class: "card-title", text: p.title }),
         el("div", { class: "card-foot" }, [
-          el("div", { class: "card-chips" }, [el("span", { class: `chip ${meta.className}`, text: meta.label }), symmetricChip(p)]),
+          el("div", { class: "card-chips" }, [
+            el("span", { class: `chip ${meta.className}`, text: meta.label }),
+            ...puzzleBadges(p).map(badgeChip),
+          ]),
         ]),
       ],
     );
@@ -124,7 +84,7 @@ export function renderMenu(host: HTMLElement): void {
     if (puzzles.length === 0) return null;
     return el("section", { class: "menu-section" }, [
       el("h2", { class: "section-title", text: title }),
-      el("div", { class: "card-grid" }, puzzles.map(libraryCard)),
+      el("div", { class: "card-grid" }, puzzles.map((p) => libraryCard(p, completed))),
     ]);
   }
 
@@ -148,7 +108,9 @@ export function renderMenu(host: HTMLElement): void {
       manageBar.classList.toggle("hidden", !on);
     });
     delSelBtn.addEventListener("click", () => {
-      const ids = selectedIds().filter(Boolean);
+      const ids = Array.from(mySection.querySelectorAll<HTMLElement>(".puzzle-card.selected"))
+        .map((c) => c.dataset.id ?? "")
+        .filter(Boolean);
       if (ids.length === 0) return;
       ids.forEach((id) => deleteUserPuzzle(id));
       renderMenu(host);
@@ -183,10 +145,6 @@ export function renderMenu(host: HTMLElement): void {
     sections.push(mySection);
   }
 
-  function selectedIds(): string[] {
-    return Array.from(mySection.querySelectorAll<HTMLElement>(".puzzle-card.selected")).map((c) => c.dataset.id ?? "");
-  }
-
   // ---- adaptive Surprise me: jump to the player's frontier tier ----
   function surpriseId(): string {
     let frontier = 0;
@@ -212,6 +170,30 @@ export function renderMenu(host: HTMLElement): void {
       ? `${completed.size} of ${LIBRARY.length} solved`
       : "Pick a puzzle and deduce the hidden picture from the number clues.";
 
+  const shareBtn = el("button", {
+    class: "btn small score-share",
+    text: "🔗 Share score",
+    on: {
+      click: () => {
+        shareScore({
+          score: pix,
+          title: scoreTitle(pix),
+          solved: completed.size,
+          total: LIBRARY.length,
+          wasReset: wasProgressReset(),
+        }).then((outcome) => {
+          if (outcome === "copied") {
+            const old = shareBtn.textContent;
+            shareBtn.textContent = "✓ Copied!";
+            window.setTimeout(() => (shareBtn.textContent = old), 1800);
+          }
+        });
+      },
+    },
+  });
+
+  // Header order (#2): brand → tagline → Pixelogic Score → actions, with the
+  // action buttons sitting close to the first section's divider line.
   const view = el("div", { class: "view menu" }, [
     el("div", { class: "menu-tools" }, [
       el("button", {
@@ -222,6 +204,12 @@ export function renderMenu(host: HTMLElement): void {
       }),
       el("button", {
         class: "icon-btn",
+        text: "ℹ",
+        attrs: { type: "button", "aria-label": "About Pixelogic", title: "About" },
+        on: { click: () => navigate("/about") },
+      }),
+      el("button", {
+        class: "icon-btn",
         text: "⚙",
         attrs: { type: "button", "aria-label": "Settings", title: "Settings" },
         on: { click: () => openSettings("home", () => renderMenu(host)) },
@@ -229,38 +217,19 @@ export function renderMenu(host: HTMLElement): void {
     ]),
     el("header", { class: "menu-header" }, [
       el("div", { class: "brand" }, [el("span", { class: "logo", text: "▦" }), el("h1", { text: "Pixelogic" })]),
-      el("div", { class: "pixelogic-score", attrs: { role: "group", "aria-label": `Pixelogic Score ${pix} of 1600` } }, [
-        el("span", { class: "laurel", text: "🌿" }),
-        el("div", { class: "score-core" }, [
-          el("span", { class: "score-value", text: pix.toLocaleString() }),
-          el("span", { class: "score-cap", text: "/ 1600" }),
-          el("span", { class: "score-title", text: scoreTitle(pix) }),
-        ]),
-        el("span", { class: "laurel flip", text: "🌿" }),
-      ]),
-      el("button", {
-        class: "btn small score-share",
-        text: "🔗 Share score",
-        on: {
-          click: (e) => {
-            const btn = e.currentTarget as HTMLButtonElement;
-            shareScore({
-              score: pix,
-              title: scoreTitle(pix),
-              solved: completed.size,
-              total: LIBRARY.length,
-              wasReset: wasProgressReset(),
-            }).then((outcome) => {
-              if (outcome === "copied") {
-                const old = btn.textContent;
-                btn.textContent = "✓ Copied!";
-                window.setTimeout(() => (btn.textContent = old), 1800);
-              }
-            });
-          },
-        },
-      }),
       el("p", { class: "tagline", text: progressLine }),
+      el("div", { class: "score-block" }, [
+        el("div", { class: "pixelogic-score", attrs: { role: "group", "aria-label": `Pixelogic Score ${pix} of 1600` } }, [
+          el("span", { class: "laurel", text: "🌿" }),
+          el("div", { class: "score-core" }, [
+            el("span", { class: "score-value", text: pix.toLocaleString() }),
+            el("span", { class: "score-cap", text: "/ 1600" }),
+            el("span", { class: "score-title", text: scoreTitle(pix) }),
+          ]),
+          el("span", { class: "laurel flip", text: "🌿" }),
+        ]),
+        shareBtn,
+      ]),
       el("div", { class: "menu-actions" }, [
         el("button", { class: "btn primary", text: "✏️ Create your own", on: { click: () => navigate("/editor") } }),
         el("button", { class: "btn", text: "🎲 Surprise me", on: { click: () => navigate(`/play/${encodeURIComponent(surpriseId())}`) } }),
@@ -269,6 +238,11 @@ export function renderMenu(host: HTMLElement): void {
     ...sections.filter((s): s is HTMLElement => s !== null),
     el("footer", { class: "menu-footer" }, [
       el("p", { html: 'Every puzzle is <strong>provably solvable by logic alone</strong> — no guessing required.' }),
+      el("button", {
+        class: "btn ghost about-link",
+        text: "ℹ About Pixelogic — scoring, difficulty & how it works",
+        on: { click: () => navigate("/about") },
+      }),
     ]),
   ]);
 

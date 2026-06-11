@@ -9,6 +9,8 @@ import { renderPlay } from "./views/play";
 import { renderEditor } from "./views/editor";
 import { renderExplainer } from "./views/explainer";
 import { renderTutorial } from "./views/tutorial";
+import { renderAbout } from "./views/about";
+import { renderBadgeList, isBadgeKey } from "./views/badgeList";
 import { getEditorDraft } from "./editorDraft";
 
 type Cleanup = () => void;
@@ -74,6 +76,14 @@ function render(): void {
   }
   if (route === "tutorial") {
     currentCleanup = renderTutorial(host);
+    return;
+  }
+  if (route === "about") {
+    renderAbout(host);
+    return;
+  }
+  if (route === "badge" && arg && isBadgeKey(arg)) {
+    renderBadgeList(host, arg);
     return;
   }
   if (route === "editor") {
