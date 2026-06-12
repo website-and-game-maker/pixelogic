@@ -131,13 +131,16 @@ struct WatchBoardView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let clueSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.rowClues.map(\.count).max() ?? 1))
+            // Rails sized independently: row clues take width, column clues
+            // take height (a board can have deep column stacks but short rows).
+            let rowSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.rowClues.map(\.count).max() ?? 1))
+            let colSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.colClues.map(\.count).max() ?? 1))
             let cell = min(
-                geo.size.width / (CGFloat(puzzle.width) + clueSpan),
-                geo.size.height / (CGFloat(puzzle.height) + clueSpan)
+                geo.size.width / (CGFloat(puzzle.width) + rowSpan),
+                geo.size.height / (CGFloat(puzzle.height) + colSpan)
             )
-            let ox = clueSpan * cell
-            let oy = clueSpan * cell
+            let ox = rowSpan * cell
+            let oy = colSpan * cell
 
             ZStack(alignment: .topLeading) {
                 // Clue rails

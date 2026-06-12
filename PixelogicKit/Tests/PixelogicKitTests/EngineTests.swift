@@ -249,3 +249,96 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(!provider.interstitialAllowed(after: 1000))
     }
 }
+
+// MARK: - Share-token parsing & import
+
+@Suite struct ShareTokenTests {
+    private let art = grid(["#.", ".#"])
+
+    @Test func everyAcceptedForm() {
+        let token = encodePuzzle(art, title: "Tiny")
+        #expect(shareToken(fromUserInput: token) == token)
+        #expect(shareToken(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/p/\(token)") == token)
+        #expect(shareToken(fromUserInput: "pixelogic://p/\(token)") == token)
+        #expect(shareToken(fromUserInput: "  pixelogic://p/\(token)\n") == token)
+    }
+
+    @Test func junkRejected() {
+        #expect(shareToken(fromUserInput: "https://example.com/nothing-here") == nil)
+        #expect(shareToken(fromUserInput: "not a token!!") == nil)
+        #expect(shareToken(fromUserInput: "") == nil)
+    }
+
+    @Test func shareURLRoundTrips() throws {
+        let token = encodePuzzle(art, title: "Tiny")
+        let parsed = try #require(shareToken(fromUserInput: webShareURL(forToken: token).absoluteString))
+        let decoded = try decodePuzzle(parsed)
+        #expect(decoded.solution == art && decoded.title == "Tiny")
+    }
+
+    @Test func importDeduplicates() {
+        let store = PlayerStore(defaults: UserDefaults(suiteName: "test.import.\(UUID().uuidString)")!)
+        let first = store.importUserPuzzle(title: "Tiny", solution: art)
+        let second = store.importUserPuzzle(title: "Tiny again", solution: art)
+        #expect(first == second && store.userPuzzles.count == 1)
+        #expect(store.importUserPuzzle(title: "Other", solution: grid(["##", "##"])) != first)
+    }
+}
+
+// MARK: - In-progress attempts
+
+@Suite struct InProgressTests {
+    @Test func attemptRoundTripsAndRestores() {
+        let store = PlayerStore(defaults: UserDefaults(suiteName: "test.ip.\(UUID().uuidString)")!)
+        let plus = puzzle(withID: "plus")!
+        let session = GameSession(puzzle: plus)
+        session.toggle(2, 0)
+        session.toggle(2, 1)
+        var tally = AssistTally()
+        tally.hint = 1
+        let attempt = InProgressAttempt(marks: session.marks, elapsedMs: 12_000, assists: tally)
+        store.saveInProgress(attempt, for: "plus")
+        #expect(store.inProgress(for: "plus") == attempt)
+
+        let resumed = GameSession(puzzle: plus)
+        resumed.restore(marks: store.inProgress(for: "plus")!.grid, elapsedMs: 12_000, assists: tally)
+        #expect(resumed.marks[2][0] == .filled && resumed.marks[2][1] == .filled)
+        #expect(resumed.elapsedMs == 12_000)
+        #expect(resumed.assists.hint == 1)
+        #expect(!resumed.canUndo) // history does not cross a relaunch
+    }
+
+    @Test func mismatchedRestoreIgnored() {
+        let session = GameSession(puzzle: puzzle(withID: "plus")!)
+        session.toggle(2, 0)
+        session.restore(marks: [[.filled]], elapsedMs: 1, assists: AssistTally())
+        #expect(session.marks[2][0] == .filled)
+    }
+
+    @Test func lifecycleClearsSnapshots() {
+        let store = PlayerStore(defaults: UserDefaults(suiteName: "test.ip2.\(UUID().uuidString)")!)
+        let attempt = InProgressAttempt(marks: makeGrid(5, 5), elapsedMs: 1, assists: AssistTally())
+        store.saveInProgress(attempt, for: "plus")
+        store.markCompleted("plus")
+        #expect(store.inProgress(for: "plus") == nil)
+        store.saveInProgress(attempt, for: "smiley")
+        store.resetProgress()
+        #expect(store.inProgress(for: "smiley") == nil)
+    }
+
+    @Test func v1SaveMigratesLosslessly() {
+        let blob = #"{"completed":["plus"],"bestTimes":{"plus":9000},"bestScores":{"plus":88},"assists":{},"userPuzzles":[],"settings":{"mistakeCheck":true,"showTimer":true,"clueStyle":"grey","autoCross":false},"tutorialSeen":true,"progressReset":false}"#
+        let defaults = UserDefaults(suiteName: "test.v1.\(UUID().uuidString)")!
+        defaults.set(Data(blob.utf8), forKey: PlayerStore.storageKey)
+        let store = PlayerStore(defaults: defaults)
+        #expect(store.isCompleted("plus") && store.bestScore(for: "plus") == 88)
+        #expect(store.settings.mistakeCheck && store.tutorialSeen)
+    }
+
+    @Test func corruptSaveStashedNotDestroyed() {
+        let defaults = UserDefaults(suiteName: "test.corrupt.\(UUID().uuidString)")!
+        defaults.set(Data("{broken".utf8), forKey: PlayerStore.storageKey)
+        _ = PlayerStore(defaults: defaults)
+        #expect(defaults.data(forKey: PlayerStore.storageKey + ".corrupt") == Data("{broken".utf8))
+    }
+}

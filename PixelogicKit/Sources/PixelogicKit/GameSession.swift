@@ -197,6 +197,22 @@ public final class GameSession {
         runningSince = now()
     }
 
+    // MARK: - Restore
+
+    /// Rehydrate a previously saved attempt (marks, elapsed time, assists).
+    /// Saves whose dimensions don't match the puzzle are ignored. History
+    /// restarts empty — undo cannot cross a relaunch, same as the web app.
+    public func restore(marks saved: Grid, elapsedMs savedElapsedMs: Int, assists savedAssists: AssistTally) {
+        guard saved.count == puzzle.height,
+              saved.allSatisfy({ $0.count == puzzle.width }) else { return }
+        marks = saved
+        assists = savedAssists
+        elapsedBase = Double(max(0, savedElapsedMs)) / 1000
+        if runningSince != nil { runningSince = now() }
+        undoStack = []
+        redoStack = []
+    }
+
     // MARK: - Scoring
 
     /// The score this attempt would earn if it ended now.

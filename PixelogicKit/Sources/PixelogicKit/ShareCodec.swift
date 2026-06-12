@@ -74,3 +74,22 @@ public func webShareURL(forToken token: String) -> URL {
 public func webShareURL(forLibraryID id: String) -> URL {
     URL(string: "https://website-and-game-maker.github.io/pixelogic/#/play/\(id)")!
 }
+
+/// Extract a share token from whatever the user pasted or tapped: a bare
+/// token, a `pixelogic://p/<token>` link, or the canonical web URL
+/// (`…/pixelogic/#/p/<token>`). Returns nil when nothing token-shaped is found.
+public func shareToken(fromUserInput input: String) -> String? {
+    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    if let range = trimmed.range(of: "/p/", options: .backwards) {
+        let tail = trimmed[range.upperBound...]
+        let token = tail.split(whereSeparator: { "?&#/".contains($0) }).first.map(String.init) ?? ""
+        return token.isEmpty ? nil : token
+    }
+    // Bare token: base64url alphabet only (what encodePuzzle emits).
+    guard trimmed.unicodeScalars.allSatisfy({
+        ("A"..."Z").contains(Character($0)) || ("a"..."z").contains(Character($0))
+            || ("0"..."9").contains(Character($0)) || $0 == "-" || $0 == "_"
+    }) else { return nil }
+    return trimmed
+}

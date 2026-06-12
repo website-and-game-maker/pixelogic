@@ -1,6 +1,8 @@
 // Observable wrapper around PixelogicKit's pure GameSession — the bridge
 // between engine semantics and SwiftUI. Mirrors the web play view's behaviour:
 // assists with live penalty meter, auto-cross, scoring on win, post-solve mode.
+// Unfinished attempts persist (board + clock + assists) so quitting never
+// loses progress.
 
 import SwiftUI
 import Combine
@@ -12,6 +14,9 @@ final class PlayViewModel: ObservableObject {
     let isLibrary: Bool
     private let store: PlayerStore
     private let session: GameSession
+    /// Save key for resumable attempts: library puzzles and saved customs.
+    /// Editor test-drives (id "draft") play ephemerally.
+    private let persistKey: String?
 
     @Published private(set) var marks: Grid
     @Published var mode: GameSession.Mode = .paint {
@@ -48,9 +53,16 @@ final class PlayViewModel: ObservableObject {
         self.isLibrary = isLibrary
         self.store = store
         self.session = GameSession(puzzle: puzzle)
+        self.persistKey = (isLibrary || puzzle.id.hasPrefix("u-")) ? puzzle.id : nil
+        if let key = persistKey, let saved = store.inProgress(for: key) {
+            session.restore(marks: saved.grid, elapsedMs: saved.elapsedMs, assists: saved.assists)
+        }
         self.marks = session.marks
         self.badges = puzzleBadges(solution: puzzle.solution, named: puzzle.named)
         self.checkSquaresLeft = session.checkSquaresLeft
+        self.penalty = session.assists.penaltyTotal
+        self.voided = session.assists.voided
+        self.elapsedMs = session.elapsedMs
         session.start()
         ticker = Timer.publish(every: 0.5, on: .main, in: .common)
             .autoconnect()
@@ -66,7 +78,8 @@ final class PlayViewModel: ObservableObject {
 
     func touch(_ r: Int, _ c: Int, isDrag: Bool) {
         guard !solved else { return }
-        if let armed = armedCheck, !isDrag {
+        if let armed = armedCheck {
+            guard !isDrag else { return } // an armed check consumes a tap, not a stroke
             armedCheck = nil
             switch armed {
             case .square:
@@ -142,7 +155,21 @@ final class PlayViewModel: ObservableObject {
         finalScore = nil
         banner = nil
         armedCheck = nil
+        if let key = persistKey { store.clearInProgress(for: key) }
         sync()
+    }
+
+    /// Scene-phase / navigation hook: pause the clock (and snapshot progress)
+    /// when play leaves the screen or the app leaves the foreground.
+    func setActive(_ active: Bool) {
+        guard !solved else { return }
+        if active {
+            session.start()
+        } else {
+            session.pause()
+            persistProgress()
+        }
+        elapsedMs = session.elapsedMs
     }
 
     // MARK: - Sync + win
@@ -158,6 +185,24 @@ final class PlayViewModel: ObservableObject {
         checkSquaresLeft = session.checkSquaresLeft
         elapsedMs = session.elapsedMs
         if !solved && session.isSolved { handleWin() }
+        persistProgress()
+    }
+
+    private func persistProgress() {
+        guard let key = persistKey else { return }
+        if solved || filledOut {
+            store.clearInProgress(for: key)
+            return
+        }
+        let untouched = session.marks.allSatisfy { row in row.allSatisfy { $0 == .unknown } }
+        if untouched && session.assists == AssistTally() {
+            store.clearInProgress(for: key) // pristine board — nothing worth resuming
+            return
+        }
+        store.saveInProgress(
+            InProgressAttempt(marks: session.marks, elapsedMs: session.elapsedMs, assists: session.assists),
+            for: key
+        )
     }
 
     private func handleWin() {
@@ -174,8 +219,8 @@ final class PlayViewModel: ObservableObject {
             let time = store.recordBestTime(puzzle.id, elapsedMs: elapsed)
             bestTimeMs = time.best
             isNewBestTime = time.isNew
-            store.clearAssists(for: puzzle.id)
         }
+        if let key = persistKey { store.clearInProgress(for: key) }
         showWinSheet = true
     }
 
@@ -186,7 +231,13 @@ final class PlayViewModel: ObservableObject {
         return "I solved “\(puzzle.title)” on Pixelogic in \(time)\(scoreBit)! ▦"
     }
 
-    var shareURL: URL { webShareURL(forLibraryID: puzzle.id) }
+    /// Library puzzles share their web page; custom puzzles share the encoded
+    /// token URL (the link IS the puzzle), so the receiver can actually open it.
+    var shareURL: URL {
+        isLibrary
+            ? webShareURL(forLibraryID: puzzle.id)
+            : webShareURL(forToken: encodePuzzle(puzzle.solution, title: puzzle.title))
+    }
 }
 
 enum TimeFormat {
