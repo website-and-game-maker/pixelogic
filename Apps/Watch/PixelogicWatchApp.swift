@@ -4,6 +4,9 @@
 import SwiftUI
 import PixelogicKit
 
+// Disambiguate from SwiftUI.Grid (a layout view) across this target.
+typealias Grid = PixelogicKit.Grid
+
 @main
 struct PixelogicWatchApp: App {
     var body: some Scene {
@@ -57,8 +60,9 @@ struct WatchHomeView: View {
             if done == watchLibrary.count {
                 Text("Pocket set complete! 🌿")
                     .font(.footnote.bold())
-                    .padding(6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.teal.opacity(0.28))) // Material is watchOS 10+
             }
         }
     }

@@ -5,6 +5,10 @@
 import SwiftUI
 import PixelogicKit
 
+// SwiftUI also defines a `Grid` (a layout view); a module-level alias makes
+// every unqualified `Grid` in this target mean the engine's cell grid.
+typealias Grid = PixelogicKit.Grid
+
 extension Color {
     init(hex: UInt32) {
         self.init(

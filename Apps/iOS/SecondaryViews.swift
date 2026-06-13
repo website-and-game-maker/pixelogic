@@ -121,6 +121,8 @@ struct AboutView: View {
         let icon: String
         let title: String
         let body: String
+        var linkLabel: String? = nil
+        var linkURL: URL? = nil
     }
 
     private let sections: [Section] = [
@@ -137,7 +139,9 @@ struct AboutView: View {
         Section(icon: "hand.raised.fill", title: "Your privacy",
                 body: "Pixelogic collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them."),
         Section(icon: "sparkles", title: "Built entirely with AI",
-                body: "Every line of Pixelogic — the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page — was designed and written by AI (Anthropic's Claude), steered by a human with opinions about how a logic game should feel."),
+                body: "Every single line of Pixelogic was written by AI — Anthropic's Claude, working in Claude Code. The logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it AI-authored, steered by a human with opinions about how a logic game should feel. No part of this app was hand-coded by a person.",
+                linkLabel: "Try Claude Code for yourself",
+                linkURL: URL(string: "https://claude.ai/referral/8H3jezX92A")),
     ]
 
     var body: some View {
@@ -152,6 +156,15 @@ struct AboutView: View {
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(Theme.ink.opacity(0.9))
                             .lineSpacing(3)
+                        if let label = s.linkLabel, let url = s.linkURL {
+                            Link(destination: url) {
+                                Label(label, systemImage: "arrow.up.forward.square")
+                                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                                    .foregroundStyle(Theme.primaryDeep)
+                            }
+                            .padding(.top, 2)
+                            .accessibilityHint("Opens claude.ai in your browser")
+                        }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
