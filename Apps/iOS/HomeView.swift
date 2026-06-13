@@ -3,6 +3,7 @@
 // the web menu, translated to an adaptive iPhone/iPad grid.
 
 import SwiftUI
+import UIKit
 import PixelogicKit
 
 struct HomeView: View {
@@ -10,6 +11,7 @@ struct HomeView: View {
     @State private var managing = false
     @State private var selectedCustoms: Set<String> = []
     @State private var confirmDeleteAll = false
+    @State private var showImport = false
 
     private let columns = [GridItem(.adaptive(minimum: 165), spacing: 14)]
 
@@ -39,6 +41,9 @@ struct HomeView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("")
+        .sheet(isPresented: $showImport) {
+            ImportPuzzleView().environmentObject(app)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button { app.showTutorial = true } label: { Image(systemName: "graduationcap") }
@@ -88,9 +93,16 @@ struct HomeView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Pixelogic Score \(score) of 1600, \(scoreTitle(score))")
 
-            ShareLink(item: URL(string: "https://website-and-game-maker.github.io/pixelogic/")!, message: Text(scoreShareText)) {
-                Label("Share score", systemImage: "square.and.arrow.up")
-                    .font(.system(.caption, design: .rounded, weight: .heavy))
+            HStack(spacing: 18) {
+                ShareLink(item: URL(string: "https://website-and-game-maker.github.io/pixelogic/")!, message: Text(scoreShareText)) {
+                    Label("Share score", systemImage: "square.and.arrow.up")
+                        .font(.system(.caption, design: .rounded, weight: .heavy))
+                }
+                Button { showImport = true } label: {
+                    Label("Import a puzzle", systemImage: "square.and.arrow.down")
+                        .font(.system(.caption, design: .rounded, weight: .heavy))
+                }
+                .accessibilityHint("Paste a shared Pixelogic link to add the puzzle")
             }
 
             HStack(spacing: 12) {
@@ -166,7 +178,7 @@ struct HomeView: View {
                         .font(.system(.footnote, design: .rounded, weight: .heavy))
                     if managing {
                         Button("Delete selected", role: .destructive) {
-                            app.store.deleteUserPuzzles(ids: selectedCustoms)
+                            app.deleteUserPuzzles(ids: selectedCustoms)
                             selectedCustoms = []
                         }
                         .disabled(selectedCustoms.isEmpty)
@@ -183,7 +195,7 @@ struct HomeView: View {
             }
             .confirmationDialog("Delete ALL of your puzzles?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
                 Button("Delete all", role: .destructive) {
-                    app.store.deleteUserPuzzles(ids: Set(customs.map(\.id)))
+                    app.deleteUserPuzzles(ids: Set(customs.map(\.id)))
                     managing = false
                 }
             }
@@ -200,6 +212,7 @@ struct HomeView: View {
                     PuzzleCard(puzzle: p, store: app.store, selected: selectedCustoms.contains(stored.id))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(selectedCustoms.contains(stored.id) ? "Deselect \(p.title)" : "Select \(p.title)")
             } else {
                 NavigationLink(value: Route.playCustom(stored.id)) {
                     PuzzleCard(puzzle: p, store: app.store)
@@ -207,7 +220,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .contextMenu {
                     NavigationLink(value: Route.editor(stored.id)) { Label("Edit", systemImage: "pencil") }
-                    Button(role: .destructive) { app.store.deleteUserPuzzles(ids: [stored.id]) } label: {
+                    Button(role: .destructive) { app.deleteUserPuzzles(ids: [stored.id]) } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 }
@@ -283,5 +296,77 @@ struct PuzzleCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Play \(puzzle.title), \(puzzle.difficulty.displayName)")
+    }
+}
+
+/// Paste-to-import for shared puzzles: accepts the web link, the
+/// pixelogic:// link, or a bare token — the puzzle lives inside the link.
+struct ImportPuzzleView: View {
+    @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var input = ""
+    @State private var errorText: String?
+    @State private var checking = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Paste a Pixelogic link or code", text: $input, axis: .vertical)
+                        .lineLimit(3...6)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .font(.system(.footnote, design: .monospaced))
+                    Button {
+                        if let s = UIPasteboard.general.string { input = s }
+                    } label: {
+                        Label("Paste from clipboard", systemImage: "doc.on.clipboard")
+                    }
+                } footer: {
+                    Text("Works with links shared from Pixelogic on the web or on another device — the whole puzzle is encoded in the link itself. Nothing is downloaded.")
+                }
+                if let errorText {
+                    Section { Text(errorText).foregroundStyle(.red) }
+                }
+                Section {
+                    Button {
+                        importNow()
+                    } label: {
+                        if checking {
+                            HStack(spacing: 8) { ProgressView(); Text("Checking the puzzle…") }
+                        } else {
+                            Text("Import puzzle")
+                        }
+                    }
+                    .disabled(checking || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .navigationTitle("Import a puzzle")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+    }
+
+    private func importNow() {
+        guard let token = shareToken(fromUserInput: input),
+              let decoded = try? decodePuzzle(token) else {
+            errorText = "That doesn\u{2019}t look like a Pixelogic puzzle link. Copy the whole link (it contains \u{201C}/p/\u{201D}) and try again."
+            return
+        }
+        errorText = nil
+        checking = true
+        Task {
+            let playable = await validateSharedSolution(decoded.solution)
+            checking = false
+            guard playable else {
+                errorText = "This shared puzzle doesn\u{2019}t have a single logical solution, so it can\u{2019}t be played here."
+                return
+            }
+            let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
+            dismiss()
+            app.path.append(Route.playCustom(id))
+        }
     }
 }

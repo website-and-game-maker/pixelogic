@@ -9,6 +9,7 @@ struct PlayView: View {
     @StateObject private var vm: PlayViewModel
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     init(puzzle: Puzzle, isLibrary: Bool, store: PlayerStore) {
         _vm = StateObject(wrappedValue: PlayViewModel(puzzle: puzzle, isLibrary: isLibrary, store: store))
@@ -61,6 +62,11 @@ struct PlayView: View {
             }
         }
         .sheet(isPresented: $vm.showWinSheet) { winSheet }
+        .onAppear { vm.setActive(true) }
+        .onDisappear { vm.setActive(false) }
+        .onChange(of: scenePhase) { phase in
+            vm.setActive(phase == .active)
+        }
     }
 
     private var header: some View {
@@ -121,10 +127,14 @@ struct PlayView: View {
             .padding(.horizontal, 20)
 
             HStack(spacing: 14) {
-                NavigationLink(value: Route.explainer(vm.puzzle.id)) {
-                    Label("Watch solve", systemImage: "brain")
+                if vm.isLibrary || vm.puzzle.id.hasPrefix("u-") { // drafts have no route
+                    Button {
+                        vm.voidForWatchSolve() // voiding must not depend on gesture timing
+                        app.path.append(Route.explainer(vm.puzzle.id))
+                    } label: {
+                        Label("Watch solve", systemImage: "brain")
+                    }
                 }
-                .simultaneousGesture(TapGesture().onEnded { vm.voidForWatchSolve() })
                 Button("Fill out", role: .destructive) { vm.fillOut() }
                 Button { vm.restart() } label: { Label("Restart", systemImage: "arrow.counterclockwise") }
             }

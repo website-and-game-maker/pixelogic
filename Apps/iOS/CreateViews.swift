@@ -140,8 +140,10 @@ struct EditorView: View {
     @State private var verdict: Verdict = .empty
     @State private var ambiguous: (Int, Int)?
     @State private var testing = false
+    /// The value the current draw stroke paints (decided by its first cell).
+    @State private var strokeValue: Bool?
 
-    enum Verdict: Equatable {
+    enum Verdict: Equatable, Sendable {
         case empty, checking, unique(Difficulty), notUnique(Int)
     }
 
@@ -157,7 +159,9 @@ struct EditorView: View {
     }
 
     private var drawnPuzzle: Puzzle {
-        Puzzle(id: "draft", title: title.isEmpty ? "My Puzzle" : title, solution: solution, difficulty: .easy)
+        let graded: Difficulty
+        if case .unique(let d) = verdict { graded = d } else { graded = .easy }
+        return Puzzle(id: "draft", title: title.isEmpty ? "My Puzzle" : title, solution: solution, difficulty: graded)
     }
 
     var body: some View {
@@ -258,13 +262,19 @@ struct EditorView: View {
                 }
             }
             .gesture(
-                DragGesture(minimumDistance: 0).onEnded { value in
-                    let c = Int(value.location.x / cell)
-                    let r = Int(value.location.y / cell)
-                    guard r >= 0, c >= 0, r < size, c < size else { return }
-                    solution[r][c].toggle()
-                    analyze()
-                }
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let c = Int(value.location.x / cell)
+                        let r = Int(value.location.y / cell)
+                        guard r >= 0, c >= 0, r < size, c < size else { return }
+                        let target = strokeValue ?? !solution[r][c]
+                        if strokeValue == nil { strokeValue = target }
+                        if solution[r][c] != target { solution[r][c] = target }
+                    }
+                    .onEnded { _ in
+                        strokeValue = nil
+                        analyze()
+                    }
             )
         }
         .aspectRatio(1, contentMode: .fit)
@@ -299,6 +309,35 @@ struct EditorView: View {
         }
     }
 
+    private struct Analysis: Sendable {
+        let verdict: Verdict
+        let ambiguous: (Int, Int)?
+    }
+
+    /// Pure solver work; nonisolated async ⇒ runs off the main actor, so the
+    /// UI stays responsive while big grids are checked.
+    private nonisolated static func analyzeGrid(_ snapshot: [[Bool]]) async -> Analysis {
+        let clues = cluesForGrid(snapshot)
+        let count = countSolutionsDetailed(clues.rowClues, clues.colClues, limit: 2)
+        let unique = count.count == 1 && !count.capped
+        var amb: (Int, Int)?
+        var tier = Difficulty.easy
+        if unique {
+            tier = gradeGrid(snapshot)
+        } else {
+            let sols = enumerateSolutions(clues.rowClues, clues.colClues, limit: 2)
+            if sols.count >= 2 {
+                outer: for r in 0..<sols[0].count {
+                    for c in 0..<sols[0][r].count where sols[0][r][c] != sols[1][r][c] {
+                        amb = (r, c)
+                        break outer
+                    }
+                }
+            }
+        }
+        return Analysis(verdict: unique ? .unique(tier) : .notUnique(count.count), ambiguous: amb)
+    }
+
     private func analyze() {
         guard filledCount > 0 else {
             verdict = .empty
@@ -307,31 +346,11 @@ struct EditorView: View {
         }
         verdict = .checking
         let snapshot = solution
-        Task.detached(priority: .userInitiated) {
-            let clues = cluesForGrid(snapshot)
-            let count = countSolutionsDetailed(clues.rowClues, clues.colClues, limit: 2)
-            let unique = count.count == 1 && !count.capped
-            var amb: (Int, Int)?
-            var tier = Difficulty.easy
-            if unique {
-                tier = gradeGrid(snapshot)
-            } else {
-                let sols = enumerateSolutions(clues.rowClues, clues.colClues, limit: 2)
-                if sols.count >= 2 {
-                    outer: for r in 0..<sols[0].count {
-                        for c in 0..<sols[0][r].count where sols[0][r][c] != sols[1][r][c] {
-                            amb = (r, c)
-                            break outer
-                        }
-                    }
-                }
-            }
-            let verdictResult: Verdict = unique ? .unique(tier) : .notUnique(count.count)
-            await MainActor.run {
-                guard snapshot == solution else { return } // stale check
-                verdict = verdictResult
-                ambiguous = amb
-            }
+        Task {
+            let result = await Self.analyzeGrid(snapshot)
+            guard snapshot == solution else { return } // stale check
+            verdict = result.verdict
+            ambiguous = result.ambiguous
         }
     }
 

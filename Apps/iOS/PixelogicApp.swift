@@ -9,11 +9,32 @@ final class AppModel: ObservableObject {
     @Published var path = NavigationPath()
     @Published var showSettings = false
     @Published var showTutorial = false
+    /// Surfaced when a shared link can't be opened (junk, or a non-unique puzzle).
+    @Published var importError: String?
 
     /// Pop the current screen and push another (used by prev/next puzzle).
     func replaceTop(with route: Route) {
         if !path.isEmpty { path.removeLast() }
         path.append(route)
+    }
+
+    /// Store mutations the UI must observe go through these wrappers —
+    /// PlayerStore itself is not observable.
+    func deleteUserPuzzles(ids: Set<String>) {
+        store.deleteUserPuzzles(ids: ids)
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func importPuzzle(title: String, solution: [[Bool]]) -> String {
+        let id = store.importUserPuzzle(title: title, solution: solution)
+        objectWillChange.send()
+        return id
+    }
+
+    /// Resolve a puzzle for routes that may point at library OR custom art.
+    func anyPuzzle(withID id: String) -> Puzzle? {
+        PixelogicKit.puzzle(withID: id) ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
     }
 }
 
@@ -31,6 +52,9 @@ struct PixelogicApp: App {
             }
             .environmentObject(app)
             .tint(Theme.primaryDeep)
+            // The hand-tuned baby-blue palette is the brand in both modes;
+            // forcing light keeps system surfaces (Form, sheets) coherent.
+            .preferredColorScheme(.light)
             .sheet(isPresented: $app.showSettings) {
                 SettingsView().environmentObject(app)
             }
@@ -41,6 +65,36 @@ struct PixelogicApp: App {
                 // First-ever launch: show the interactive tutorial before the menu.
                 if !app.store.tutorialSeen { app.showTutorial = true }
             }
+            .onOpenURL { url in
+                openSharedPuzzle(url)
+            }
+            .alert("Couldn’t open that puzzle", isPresented: Binding(
+                get: { app.importError != nil },
+                set: { if !$0 { app.importError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(app.importError ?? "")
+            }
+        }
+    }
+
+    /// pixelogic://p/<token> (and the web URL form) → validate, import & play.
+    private func openSharedPuzzle(_ url: URL) {
+        guard let token = shareToken(fromUserInput: url.absoluteString),
+              let decoded = try? decodePuzzle(token) else {
+            app.importError = "That link isn’t a Pixelogic puzzle."
+            return
+        }
+        app.showTutorial = false // a deep link takes precedence over first-launch onboarding
+        Task {
+            guard await validateSharedSolution(decoded.solution) else {
+                app.importError = "This shared puzzle doesn’t have a single logical solution, so it can’t be played here."
+                return
+            }
+            let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
+            app.path = NavigationPath()
+            app.path.append(Route.playCustom(id))
         }
     }
 
@@ -62,7 +116,7 @@ struct PixelogicApp: App {
         case .about:
             AboutView()
         case .explainer(let id):
-            if let p = puzzle(withID: id) {
+            if let p = app.anyPuzzle(withID: id) {
                 ExplainerView(puzzle: p)
             }
         }

@@ -10,7 +10,7 @@ PixelogicKit/        SwiftPM package — the whole game engine (pure, UI-free)
   Sources/PixelogicKit/     solver, uniqueness prover, grader, badges, scoring,
                             hints, session model, persistence, web-compatible
                             share codec, 32-puzzle verified library, ad-readiness
-  Sources/pixelogic-verify/ 273-check verifier that runs with bare CLT
+  Sources/pixelogic-verify/ 300-check verifier that runs with bare CLT
   Tests/                    the same checks as Swift Testing suites (Xcode)
 Apps/iOS/            SwiftUI app for iPhone + iPad (web look, translated)
 Apps/Watch/          watchOS app — redesigned for the wrist (see DESIGN.md)
@@ -23,7 +23,7 @@ project.yml          XcodeGen definition (iOS + watchOS targets)
 
 ```bash
 # Engine: builds and verifies with Command Line Tools alone
-cd PixelogicKit && swift run pixelogic-verify    # → VERIFY OK (273 checks)
+cd PixelogicKit && swift run pixelogic-verify    # → VERIFY OK (300 checks)
 
 # Apps: require full Xcode
 brew install xcodegen
@@ -37,8 +37,13 @@ open Pixelogic.xcodeproj   # select the Pixelogic / PixelogicWatch schemes
   — proven by the engine at test time, same as the web app.
 - Difficulty, badges, par times, penalties and the 0–1600 Pixelogic Score are
   **numerically identical** to the web implementation.
-- Custom-puzzle share links are **byte-compatible** with the web app
-  (a token minted on the phone opens in any browser and vice versa).
+- Custom-puzzle share links are **byte-compatible** with the web app.
+  A token minted on the phone opens in any browser; a web link travels back
+  into the app via paste-import (Home → "Import a puzzle") or a
+  `pixelogic://p/<token>` link.
+- **Quitting never loses a board.** In-progress attempts (marks, clock,
+  penalties) persist per puzzle and resume exactly; the clock pauses whenever
+  the app leaves the foreground.
 - **No data leaves the device.** No ads (a dormant, documented protocol exists
   for the future — `AdReadiness.swift` — with no reserved UI space).
 

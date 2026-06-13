@@ -4,6 +4,9 @@
 import SwiftUI
 import PixelogicKit
 
+// Disambiguate from SwiftUI.Grid (a layout view) across this target.
+typealias Grid = PixelogicKit.Grid
+
 @main
 struct PixelogicWatchApp: App {
     var body: some Scene {
@@ -57,8 +60,9 @@ struct WatchHomeView: View {
             if done == watchLibrary.count {
                 Text("Pocket set complete! 🌿")
                     .font(.footnote.bold())
-                    .padding(6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.teal.opacity(0.28))) // Material is watchOS 10+
             }
         }
     }
@@ -131,13 +135,16 @@ struct WatchBoardView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let clueSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.rowClues.map(\.count).max() ?? 1))
+            // Rails sized independently: row clues take width, column clues
+            // take height (a board can have deep column stacks but short rows).
+            let rowSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.rowClues.map(\.count).max() ?? 1))
+            let colSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.colClues.map(\.count).max() ?? 1))
             let cell = min(
-                geo.size.width / (CGFloat(puzzle.width) + clueSpan),
-                geo.size.height / (CGFloat(puzzle.height) + clueSpan)
+                geo.size.width / (CGFloat(puzzle.width) + rowSpan),
+                geo.size.height / (CGFloat(puzzle.height) + colSpan)
             )
-            let ox = clueSpan * cell
-            let oy = clueSpan * cell
+            let ox = rowSpan * cell
+            let oy = colSpan * cell
 
             ZStack(alignment: .topLeading) {
                 // Clue rails

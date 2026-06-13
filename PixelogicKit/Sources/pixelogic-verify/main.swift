@@ -165,6 +165,70 @@ let webDecoded = try! decodePuzzle(webToken)
 check(webDecoded.solution == art && webDecoded.title == "Tiny", "decodes a web-generated token")
 check((try? decodePuzzle("not-a-token")) == nil, "malformed token throws")
 
+// MARK: - Share-token parsing (every import path the app accepts)
+print("Share-token parsing:")
+check(shareToken(fromUserInput: token) == token, "bare token passes through")
+check(shareToken(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/p/\(token)") == token, "web URL form parses")
+check(shareToken(fromUserInput: "pixelogic://p/\(token)") == token, "pixelogic:// form parses")
+check(shareToken(fromUserInput: "  pixelogic://p/\(token)\n") == token, "surrounding whitespace trimmed")
+check(shareToken(fromUserInput: "https://example.com/nothing-here") == nil, "foreign URL rejected")
+check(shareToken(fromUserInput: "not a token!!") == nil, "junk rejected")
+check(shareToken(fromUserInput: "") == nil, "empty input rejected")
+if let webRT = shareToken(fromUserInput: webShareURL(forToken: token).absoluteString) {
+    let rt = try! decodePuzzle(webRT)
+    check(rt.solution == art && rt.title == "Tiny", "share URL → token → puzzle round-trips")
+} else {
+    check(false, "share URL → token → puzzle round-trips")
+}
+
+// MARK: - In-progress attempts (quit the app, keep the board)
+print("In-progress attempts:")
+let ipStore = PlayerStore(defaults: UserDefaults(suiteName: "verify.ip.\(UUID().uuidString)")!)
+var ipTally = AssistTally()
+ipTally.hint = 1
+let plusP = puzzle(withID: "plus")!
+let ipSession = GameSession(puzzle: plusP)
+ipSession.toggle(2, 0)
+ipSession.toggle(2, 1)
+let snapshotAttempt = InProgressAttempt(marks: ipSession.marks, elapsedMs: 12_000, assists: ipTally)
+ipStore.saveInProgress(snapshotAttempt, for: "plus")
+check(ipStore.inProgress(for: "plus") == snapshotAttempt, "attempt round-trips through the store")
+let resumed = GameSession(puzzle: plusP)
+resumed.restore(marks: ipStore.inProgress(for: "plus")!.grid, elapsedMs: 12_000, assists: ipTally)
+check(resumed.marks[2][0] == .filled && resumed.marks[2][1] == .filled, "restored marks match")
+check(resumed.elapsedMs == 12_000, "restored clock continues from the save")
+check(resumed.assists.hint == 1 && resumed.assists.penaltyTotal == AssistTally.penaltyHint, "restored assists keep their penalty")
+check(!resumed.canUndo, "history does not cross a relaunch")
+resumed.restore(marks: [[.filled]], elapsedMs: 1, assists: AssistTally())
+check(resumed.marks[2][0] == .filled, "dimension-mismatched restore is ignored")
+ipStore.markCompleted("plus")
+check(ipStore.inProgress(for: "plus") == nil, "completing clears the snapshot")
+ipStore.saveInProgress(snapshotAttempt, for: "smiley")
+ipStore.resetProgress()
+check(ipStore.inProgress(for: "smiley") == nil, "reset clears snapshots")
+
+// A v1 save written before in-progress snapshots existed must load losslessly.
+let v1Blob = #"{"completed":["plus"],"bestTimes":{"plus":9000},"bestScores":{"plus":88},"assists":{},"userPuzzles":[],"settings":{"mistakeCheck":true,"showTimer":true,"clueStyle":"grey","autoCross":false},"tutorialSeen":true,"progressReset":false}"#
+let v1Defaults = UserDefaults(suiteName: "verify.v1.\(UUID().uuidString)")!
+v1Defaults.set(Data(v1Blob.utf8), forKey: PlayerStore.storageKey)
+let migrated = PlayerStore(defaults: v1Defaults)
+check(migrated.isCompleted("plus") && migrated.bestScore(for: "plus") == 88, "v1 save: progress survives the upgrade")
+check(migrated.settings.mistakeCheck && migrated.tutorialSeen, "v1 save: settings & tutorial flag survive")
+
+// Corrupt saves are stashed for recovery, never silently destroyed.
+let corruptDefaults = UserDefaults(suiteName: "verify.corrupt.\(UUID().uuidString)")!
+corruptDefaults.set(Data("{broken".utf8), forKey: PlayerStore.storageKey)
+_ = PlayerStore(defaults: corruptDefaults)
+check(corruptDefaults.data(forKey: PlayerStore.storageKey + ".corrupt") == Data("{broken".utf8), "corrupt save stashed, not destroyed")
+
+// MARK: - Import dedupe
+print("Import:")
+let importStore = PlayerStore(defaults: UserDefaults(suiteName: "verify.import.\(UUID().uuidString)")!)
+let firstID = importStore.importUserPuzzle(title: "Tiny", solution: art)
+let secondID = importStore.importUserPuzzle(title: "Tiny again", solution: art)
+check(firstID == secondID && importStore.userPuzzles.count == 1, "re-importing the same picture reuses it")
+check(importStore.importUserPuzzle(title: "Other", solution: grid(["##", "##"])) != firstID, "different picture gets its own id")
+
 // MARK: - Custom puzzles in the store
 print("Custom puzzles:")
 let customStore = PlayerStore(defaults: UserDefaults(suiteName: "verify.custom.\(UUID().uuidString)")!)
@@ -178,6 +242,23 @@ customStore.resetProgress()
 check(customStore.userPuzzles.count == 1, "reset keeps custom puzzles")
 customStore.deleteUserPuzzles(ids: ["u-1"])
 check(customStore.userPuzzles.isEmpty, "mass delete works")
+
+// MARK: - Import uniqueness gate
+print("Import uniqueness gate:")
+check(sharedSolutionIsUnique(grid(["##", "#."])), "L-shape (unique) accepted")
+check(!sharedSolutionIsUnique(grid(["#.", ".#"])), "checkerboard (2 solutions) refused")
+check(!sharedSolutionIsUnique([]), "empty grid refused")
+check(!sharedSolutionIsUnique([[true], [true, false]]), "ragged grid refused")
+check(sharedSolutionIsUnique(puzzle(withID: "plus")!.solution), "a library puzzle is unique")
+
+// MARK: - Corrupt custom-puzzle entry doesn't wipe the rest
+print("Resilient custom-puzzle decode:")
+// One valid entry + one missing its `solution` field; only the bad one drops.
+let mixedBlob = #"{"userPuzzles":[{"id":"good","title":"Good","solution":[[true,false],[false,true]]},{"id":"bad","title":"Broken"}]}"#
+let mixedDefaults = UserDefaults(suiteName: "verify.mixed.\(UUID().uuidString)")!
+mixedDefaults.set(Data(mixedBlob.utf8), forKey: PlayerStore.storageKey)
+let mixedStore = PlayerStore(defaults: mixedDefaults)
+check(mixedStore.userPuzzles.count == 1 && mixedStore.userPuzzles[0].id == "good", "one corrupt custom entry dropped, the good one survives")
 
 // MARK: - Ads (none, ever)
 print("AdReadiness:")
