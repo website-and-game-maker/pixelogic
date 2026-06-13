@@ -8,7 +8,7 @@ required-reason API rules. Each item cites the guideline.
 
 | Guideline | Requirement | Status |
 |---|---|---|
-| **2.1 Completeness** | Final build, tested on-device, no placeholders | ◐ Engine verified on this machine (294 checks, `swift run pixelogic-verify`). UI must be run once in Xcode + simulators before submission (no Xcode on the build machine — see "Remaining human steps"). No placeholder content anywhere. |
+| **2.1 Completeness** | Final build, tested on-device, no placeholders | ◐ Engine verified on this machine (300 checks, `swift run pixelogic-verify`). UI must be run once in Xcode + simulators before submission (no Xcode on the build machine — see "Remaining human steps"). No placeholder content anywhere. |
 | **2.3 Accurate metadata** | Screenshots of real gameplay, honest description | ☐ Take screenshots in the simulator at submission time (home, play, win, editor, watch). Description draft in README. |
 | **2.3.6 / 2.3.8 Age rating** | Honest rating, 4+-appropriate metadata | ✓ Pure logic puzzles, no objectionable content → 4+. |
 | **2.4.2 Power** | No battery drain / heat | ✓ No background work, no timers beyond a 0.5 s UI tick during active play, no network. Canvas redraws only on state change. |
@@ -79,6 +79,29 @@ required-reason API rules. Each item cites the guideline.
     last-write-wins whole-blob; multiple scenes are now declared off.
 21. Hard-coded light branding clashed with dark-mode system surfaces (Form,
     TextField); the app now declares a light appearance coherently.
+
+## Issues found in the third pass (2026-06-13, all fixed)
+
+22. **Imported puzzles bypassed the uniqueness guarantee.** A share token can
+    encode *any* grid; the editor refuses to save a non-unique puzzle, but the
+    new import paths didn't re-check. A multi-solution imported board is
+    unwinnable here (`GameSession.isSolved` compares to the one stored picture)
+    and mistake-check would paint a player's *valid* cells red. Both import
+    paths (URL and paste) now run the same exactly-one-solution gate the editor
+    uses (`validateSharedSolution`, off the main thread) and refuse non-unique
+    tokens with a clear message. This also makes BoardView's mistake-check
+    sound for every playable puzzle.
+23. A single corrupt custom-puzzle entry in the save blob would have dropped
+    the player's **entire** collection (the round-1 field-level decode caught
+    most corruption but still decoded `userPuzzles` as one array). It now
+    decodes element by element — a bad entry is skipped, the rest survive.
+24. A deep link arriving during the first-launch tutorial cover would queue
+    the puzzle behind it; the tutorial is now dismissed when a link opens.
+25. A bad or non-unique `pixelogic://` link used to no-op silently; it now
+    shows an explanatory alert.
+26. De-risked an `if`-expression in the editor (`drawnPuzzle`) into plain
+    statements — the app targets can't be compiled on this machine, so exotic
+    expression syntax was replaced with the unambiguous statement form.
 
 ## Remaining human steps (cannot be done on this machine — no Xcode/simulators)
 

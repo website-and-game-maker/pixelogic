@@ -60,6 +60,16 @@ public struct InProgressAttempt: Codable, Sendable, Equatable {
     public var grid: Grid { marks.map { $0.map { Cell(rawValue: $0) ?? .unknown } } }
 }
 
+/// Decodes `T` but never throws: a malformed element becomes `nil` instead of
+/// failing the whole container. Used so a single corrupt custom-puzzle entry
+/// can't wipe a player's entire collection.
+private struct Failable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
+    }
+}
+
 public struct SaveData: Codable, Sendable {
     public var completed: Set<String> = []
     /// Fastest solve time (ms) per puzzle id.
@@ -97,7 +107,13 @@ public struct SaveData: Codable, Sendable {
         bestTimes = field([String: Int].self, .bestTimes, [:])
         bestScores = field([String: Int].self, .bestScores, [:])
         assists = field([String: AssistTally].self, .assists, [:])
-        userPuzzles = field([StoredPuzzle].self, .userPuzzles, [])
+        // Custom puzzles are the one thing promised to survive everything, so
+        // decode them element by element: a corrupt entry is dropped, the rest live.
+        if let wrapped = try? c.decodeIfPresent([Failable<StoredPuzzle>].self, forKey: .userPuzzles) {
+            userPuzzles = (wrapped ?? []).compactMap(\.value)
+        } else {
+            userPuzzles = []
+        }
         settings = field(GameSettings.self, .settings, GameSettings())
         tutorialSeen = field(Bool.self, .tutorialSeen, false)
         progressReset = field(Bool.self, .progressReset, false)

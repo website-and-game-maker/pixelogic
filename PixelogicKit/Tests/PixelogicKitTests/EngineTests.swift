@@ -342,3 +342,28 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(defaults.data(forKey: PlayerStore.storageKey + ".corrupt") == Data("{broken".utf8))
     }
 }
+
+// MARK: - Import safety (pass 2)
+
+@Suite struct ImportSafetyTests {
+    @Test func uniquenessGate() {
+        #expect(sharedSolutionIsUnique(grid(["##", "#."])))          // one solution
+        #expect(!sharedSolutionIsUnique(grid(["#.", ".#"])))         // checkerboard: two
+        #expect(!sharedSolutionIsUnique([]))                          // empty
+        #expect(!sharedSolutionIsUnique([[true], [true, false]]))    // ragged
+        #expect(sharedSolutionIsUnique(puzzle(withID: "plus")!.solution))
+    }
+
+    @Test func asyncWrapperAgrees() async {
+        #expect(await validateSharedSolution(grid(["##", "#."])))
+        #expect(!(await validateSharedSolution(grid(["#.", ".#"]))))
+    }
+
+    @Test func oneCorruptCustomEntryDoesNotWipeTheRest() {
+        let blob = #"{"userPuzzles":[{"id":"good","title":"Good","solution":[[true,false],[false,true]]},{"id":"bad","title":"Broken"}]}"#
+        let defaults = UserDefaults(suiteName: "test.mixed.\(UUID().uuidString)")!
+        defaults.set(Data(blob.utf8), forKey: PlayerStore.storageKey)
+        let store = PlayerStore(defaults: defaults)
+        #expect(store.userPuzzles.count == 1 && store.userPuzzles[0].id == "good")
+    }
+}

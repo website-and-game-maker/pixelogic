@@ -159,7 +159,8 @@ struct EditorView: View {
     }
 
     private var drawnPuzzle: Puzzle {
-        let graded: Difficulty = if case .unique(let d) = verdict { d } else { .easy }
+        let graded: Difficulty
+        if case .unique(let d) = verdict { graded = d } else { graded = .easy }
         return Puzzle(id: "draft", title: title.isEmpty ? "My Puzzle" : title, solution: solution, difficulty: graded)
     }
 

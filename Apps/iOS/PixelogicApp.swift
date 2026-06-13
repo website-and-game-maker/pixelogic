@@ -9,6 +9,8 @@ final class AppModel: ObservableObject {
     @Published var path = NavigationPath()
     @Published var showSettings = false
     @Published var showTutorial = false
+    /// Surfaced when a shared link can't be opened (junk, or a non-unique puzzle).
+    @Published var importError: String?
 
     /// Pop the current screen and push another (used by prev/next puzzle).
     func replaceTop(with route: Route) {
@@ -66,16 +68,34 @@ struct PixelogicApp: App {
             .onOpenURL { url in
                 openSharedPuzzle(url)
             }
+            .alert("Couldn’t open that puzzle", isPresented: Binding(
+                get: { app.importError != nil },
+                set: { if !$0 { app.importError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(app.importError ?? "")
+            }
         }
     }
 
-    /// pixelogic://p/<token> (and the web URL form) → import & play.
+    /// pixelogic://p/<token> (and the web URL form) → validate, import & play.
     private func openSharedPuzzle(_ url: URL) {
         guard let token = shareToken(fromUserInput: url.absoluteString),
-              let decoded = try? decodePuzzle(token) else { return }
-        let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
-        app.path = NavigationPath()
-        app.path.append(Route.playCustom(id))
+              let decoded = try? decodePuzzle(token) else {
+            app.importError = "That link isn’t a Pixelogic puzzle."
+            return
+        }
+        app.showTutorial = false // a deep link takes precedence over first-launch onboarding
+        Task {
+            guard await validateSharedSolution(decoded.solution) else {
+                app.importError = "This shared puzzle doesn’t have a single logical solution, so it can’t be played here."
+                return
+            }
+            let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
+            app.path = NavigationPath()
+            app.path.append(Route.playCustom(id))
+        }
     }
 
     @ViewBuilder

@@ -306,6 +306,7 @@ struct ImportPuzzleView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @State private var errorText: String?
+    @State private var checking = false
 
     var body: some View {
         NavigationStack {
@@ -328,8 +329,16 @@ struct ImportPuzzleView: View {
                     Section { Text(errorText).foregroundStyle(.red) }
                 }
                 Section {
-                    Button("Import puzzle") { importNow() }
-                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button {
+                        importNow()
+                    } label: {
+                        if checking {
+                            HStack(spacing: 8) { ProgressView(); Text("Checking the puzzle…") }
+                        } else {
+                            Text("Import puzzle")
+                        }
+                    }
+                    .disabled(checking || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .navigationTitle("Import a puzzle")
@@ -346,8 +355,18 @@ struct ImportPuzzleView: View {
             errorText = "That doesn\u{2019}t look like a Pixelogic puzzle link. Copy the whole link (it contains \u{201C}/p/\u{201D}) and try again."
             return
         }
-        let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
-        dismiss()
-        app.path.append(Route.playCustom(id))
+        errorText = nil
+        checking = true
+        Task {
+            let playable = await validateSharedSolution(decoded.solution)
+            checking = false
+            guard playable else {
+                errorText = "This shared puzzle doesn\u{2019}t have a single logical solution, so it can\u{2019}t be played here."
+                return
+            }
+            let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
+            dismiss()
+            app.path.append(Route.playCustom(id))
+        }
     }
 }

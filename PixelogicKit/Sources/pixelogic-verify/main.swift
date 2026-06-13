@@ -243,6 +243,23 @@ check(customStore.userPuzzles.count == 1, "reset keeps custom puzzles")
 customStore.deleteUserPuzzles(ids: ["u-1"])
 check(customStore.userPuzzles.isEmpty, "mass delete works")
 
+// MARK: - Import uniqueness gate
+print("Import uniqueness gate:")
+check(sharedSolutionIsUnique(grid(["##", "#."])), "L-shape (unique) accepted")
+check(!sharedSolutionIsUnique(grid(["#.", ".#"])), "checkerboard (2 solutions) refused")
+check(!sharedSolutionIsUnique([]), "empty grid refused")
+check(!sharedSolutionIsUnique([[true], [true, false]]), "ragged grid refused")
+check(sharedSolutionIsUnique(puzzle(withID: "plus")!.solution), "a library puzzle is unique")
+
+// MARK: - Corrupt custom-puzzle entry doesn't wipe the rest
+print("Resilient custom-puzzle decode:")
+// One valid entry + one missing its `solution` field; only the bad one drops.
+let mixedBlob = #"{"userPuzzles":[{"id":"good","title":"Good","solution":[[true,false],[false,true]]},{"id":"bad","title":"Broken"}]}"#
+let mixedDefaults = UserDefaults(suiteName: "verify.mixed.\(UUID().uuidString)")!
+mixedDefaults.set(Data(mixedBlob.utf8), forKey: PlayerStore.storageKey)
+let mixedStore = PlayerStore(defaults: mixedDefaults)
+check(mixedStore.userPuzzles.count == 1 && mixedStore.userPuzzles[0].id == "good", "one corrupt custom entry dropped, the good one survives")
+
 // MARK: - Ads (none, ever)
 print("AdReadiness:")
 let ads = AdSlots.current()

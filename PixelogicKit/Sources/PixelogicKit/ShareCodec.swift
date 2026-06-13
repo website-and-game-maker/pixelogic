@@ -93,3 +93,25 @@ public func shareToken(fromUserInput input: String) -> String? {
     }) else { return nil }
     return trimmed
 }
+
+/// Whether a decoded share payload is safe to play: it must have EXACTLY ONE
+/// solution — the same guarantee the editor enforces before it lets you Save.
+/// Share tokens can encode any grid (a tampered or hand-made link, or a legacy
+/// token), and a multi-solution board is unwinnable here: `GameSession.isSolved`
+/// compares against the one stored picture, so a player who finds a different
+/// valid picture never registers a win, and mistake-check would paint their
+/// (valid) cells red. Imports run this gate; non-unique tokens are refused.
+public func sharedSolutionIsUnique(_ solution: [[Bool]]) -> Bool {
+    let h = solution.count
+    guard h > 0, let w = solution.first?.count, w > 0,
+          solution.allSatisfy({ $0.count == w }) else { return false }
+    let clues = cluesForGrid(solution)
+    return hasUniqueSolution(clues.rowClues, clues.colClues)
+}
+
+/// Off-the-caller's-actor async wrapper, so a big imported grid is validated
+/// without blocking the main thread. A free `async` function is `nonisolated`,
+/// so the solver runs on the cooperative pool.
+public func validateSharedSolution(_ solution: [[Bool]]) async -> Bool {
+    sharedSolutionIsUnique(solution)
+}

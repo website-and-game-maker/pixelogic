@@ -10,7 +10,7 @@ PixelogicKit/        SwiftPM package — the whole game engine (pure, UI-free)
   Sources/PixelogicKit/     solver, uniqueness prover, grader, badges, scoring,
                             hints, session model, persistence, web-compatible
                             share codec, 32-puzzle verified library, ad-readiness
-  Sources/pixelogic-verify/ 294-check verifier that runs with bare CLT
+  Sources/pixelogic-verify/ 300-check verifier that runs with bare CLT
   Tests/                    the same checks as Swift Testing suites (Xcode)
 Apps/iOS/            SwiftUI app for iPhone + iPad (web look, translated)
 Apps/Watch/          watchOS app — redesigned for the wrist (see DESIGN.md)
@@ -23,7 +23,7 @@ project.yml          XcodeGen definition (iOS + watchOS targets)
 
 ```bash
 # Engine: builds and verifies with Command Line Tools alone
-cd PixelogicKit && swift run pixelogic-verify    # → VERIFY OK (294 checks)
+cd PixelogicKit && swift run pixelogic-verify    # → VERIFY OK (300 checks)
 
 # Apps: require full Xcode
 brew install xcodegen
