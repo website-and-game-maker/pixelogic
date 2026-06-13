@@ -243,6 +243,24 @@ check(customStore.userPuzzles.count == 1, "reset keeps custom puzzles")
 customStore.deleteUserPuzzles(ids: ["u-1"])
 check(customStore.userPuzzles.isEmpty, "mass delete works")
 
+// MARK: - Library share links
+print("Library share links:")
+check(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/play/plus") == "plus", "library URL → id")
+check(libraryShareID(fromUserInput: "  #/play/heart\n") == "heart", "trims + parses bare fragment")
+check(libraryShareID(fromUserInput: webShareURL(forLibraryID: "smiley").absoluteString) == "smiley", "round-trips webShareURL(forLibraryID:)")
+check(libraryShareID(fromUserInput: "pixelogic://p/\(token)") == nil, "custom token link is not a library link")
+check(libraryShareID(fromUserInput: "nonsense") == nil, "junk → nil")
+
+// MARK: - Editing a custom puzzle drops its stale in-progress board
+print("Edit invalidates stale resume:")
+let editStore = PlayerStore(defaults: UserDefaults(suiteName: "verify.edit.\(UUID().uuidString)")!)
+editStore.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: grid(["##", "#."])))
+editStore.saveInProgress(InProgressAttempt(marks: [[.filled, .unknown], [.unknown, .unknown]], elapsedMs: 5, assists: AssistTally()), for: "u-e")
+editStore.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: grid(["##", "#."]))) // same art
+check(editStore.inProgress(for: "u-e") != nil, "same-art re-save keeps the in-progress board")
+editStore.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: grid([".#", "##"]))) // changed art
+check(editStore.inProgress(for: "u-e") == nil, "edited art drops the stale in-progress board")
+
 // MARK: - Import uniqueness gate
 print("Import uniqueness gate:")
 check(sharedSolutionIsUnique(grid(["##", "#."])), "L-shape (unique) accepted")

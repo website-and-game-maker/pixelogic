@@ -307,6 +307,7 @@ struct ImportPuzzleView: View {
     @State private var input = ""
     @State private var errorText: String?
     @State private var checking = false
+    @State private var work: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -347,26 +348,39 @@ struct ImportPuzzleView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
+        .onDisappear { work?.cancel() } // a cancelled sheet must not still import
     }
 
     private func importNow() {
+        errorText = nil
+        // A library link (web #/play/<id>) opens the built-in puzzle directly.
+        if let libID = libraryShareID(fromUserInput: input), PixelogicKit.puzzle(withID: libID) != nil {
+            open(.play(libID))
+            return
+        }
         guard let token = shareToken(fromUserInput: input),
               let decoded = try? decodePuzzle(token) else {
             errorText = "That doesn\u{2019}t look like a Pixelogic puzzle link. Copy the whole link (it contains \u{201C}/p/\u{201D}) and try again."
             return
         }
-        errorText = nil
         checking = true
-        Task {
+        work = Task {
             let playable = await validateSharedSolution(decoded.solution)
+            if Task.isCancelled { return } // sheet was dismissed mid-check
             checking = false
             guard playable else {
                 errorText = "This shared puzzle doesn\u{2019}t have a single logical solution, so it can\u{2019}t be played here."
                 return
             }
             let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
-            dismiss()
-            app.path.append(Route.playCustom(id))
+            open(.playCustom(id))
         }
+    }
+
+    /// Push the route, THEN dismiss — appending after dismiss races the sheet
+    /// teardown on iOS 16 and the push is silently dropped.
+    private func open(_ route: Route) {
+        app.path.append(route)
+        dismiss()
     }
 }

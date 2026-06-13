@@ -367,3 +367,30 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(store.userPuzzles.count == 1 && store.userPuzzles[0].id == "good")
     }
 }
+
+// MARK: - Library links & edit-invalidation (review pass)
+
+@Suite struct LibraryLinkTests {
+    @Test func parsesLibraryLinks() {
+        #expect(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/play/plus") == "plus")
+        #expect(libraryShareID(fromUserInput: "  #/play/heart\n") == "heart")
+        #expect(libraryShareID(fromUserInput: webShareURL(forLibraryID: "smiley").absoluteString) == "smiley")
+    }
+    @Test func rejectsNonLibrary() {
+        #expect(libraryShareID(fromUserInput: "pixelogic://p/abc123") == nil)
+        #expect(libraryShareID(fromUserInput: "nonsense") == nil)
+    }
+}
+
+@Suite struct EditInvalidationTests {
+    @Test func editedArtDropsStaleResume() {
+        let store = PlayerStore(defaults: UserDefaults(suiteName: "test.edit.\(UUID().uuidString)")!)
+        let art = grid(["##", "#."])
+        store.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: art))
+        store.saveInProgress(InProgressAttempt(marks: makeGrid(2, 2), elapsedMs: 5, assists: AssistTally()), for: "u-e")
+        store.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: art))      // same art
+        #expect(store.inProgress(for: "u-e") != nil)
+        store.saveUserPuzzle(StoredPuzzle(id: "u-e", title: "Mine", solution: grid([".#", "##"]))) // changed
+        #expect(store.inProgress(for: "u-e") == nil)
+    }
+}
