@@ -159,18 +159,18 @@ final class PlayViewModel: ObservableObject {
         sync()
     }
 
-    /// Scene-phase / navigation hook: pause the clock (and snapshot progress)
-    /// when play leaves the screen or the app leaves the foreground.
+    /// Scene-phase / navigation hook: pause or resume the clock when play leaves
+    /// or returns to the foreground. Cheap — does NOT persist (see `persistNow`).
     func setActive(_ active: Bool) {
         guard !solved else { return }
-        if active {
-            session.start()
-        } else {
-            session.pause()
-            persistProgress()
-        }
+        if active { session.start() } else { session.pause() }
         elapsedMs = session.elapsedMs
     }
+
+    /// Snapshot the unfinished attempt. Called only at real checkpoints
+    /// (navigating away, app backgrounding) — never per touch — so a full
+    /// SaveData encode can't run dozens of times mid-drag.
+    func persistNow() { persistProgress() }
 
     // MARK: - Sync + win
 
@@ -185,7 +185,6 @@ final class PlayViewModel: ObservableObject {
         checkSquaresLeft = session.checkSquaresLeft
         elapsedMs = session.elapsedMs
         if !solved && session.isSolved { handleWin() }
-        persistProgress()
     }
 
     private func persistProgress() {
@@ -210,7 +209,7 @@ final class PlayViewModel: ObservableObject {
         session.pause()
         let elapsed = session.elapsedMs
 
-        if !filledOut && isLibrary {
+        if !session.assists.voided && isLibrary {
             store.markCompleted(puzzle.id)
             let score = session.currentScore
             let rec = store.recordScore(puzzle.id, score: score)

@@ -62,8 +62,9 @@ struct PixelogicApp: App {
                 TutorialView().environmentObject(app)
             }
             .onAppear {
-                // First-ever launch: show the interactive tutorial before the menu.
-                if !app.store.tutorialSeen { app.showTutorial = true }
+                // First-ever launch: show the tutorial before the menu — unless a
+                // deep link has already pushed a puzzle (path non-empty).
+                if !app.store.tutorialSeen && app.path.isEmpty { app.showTutorial = true }
             }
             .onOpenURL { url in
                 openSharedPuzzle(url)
@@ -86,12 +87,16 @@ struct PixelogicApp: App {
             app.importError = "That link isn’t a Pixelogic puzzle."
             return
         }
-        app.showTutorial = false // a deep link takes precedence over first-launch onboarding
         Task {
             guard await validateSharedSolution(decoded.solution) else {
+                // Leave any first-launch tutorial intact — a bad link shouldn't
+                // silently swallow onboarding.
                 app.importError = "This shared puzzle doesn’t have a single logical solution, so it can’t be played here."
                 return
             }
+            // Success: clear whatever's covering the stack, then open the puzzle.
+            app.showTutorial = false
+            app.showSettings = false
             let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
             app.path = NavigationPath()
             app.path.append(Route.playCustom(id))

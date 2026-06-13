@@ -109,6 +109,17 @@ public func sharedSolutionIsUnique(_ solution: [[Bool]]) -> Bool {
     return hasUniqueSolution(clues.rowClues, clues.colClues)
 }
 
+/// Pull a LIBRARY puzzle id out of a shared link (web `#/play/<id>`), the form
+/// `webShareURL(forLibraryID:)` emits. Returns nil if the input isn't a library
+/// link. (Custom-puzzle links use `/p/<token>` — see `shareToken`.)
+public func libraryShareID(fromUserInput input: String) -> String? {
+    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let range = trimmed.range(of: "/play/", options: .backwards) else { return nil }
+    let tail = trimmed[range.upperBound...]
+    let id = tail.split(whereSeparator: { "?&#/".contains($0) }).first.map(String.init) ?? ""
+    return id.isEmpty ? nil : id
+}
+
 /// Off-the-caller's-actor async wrapper, so a big imported grid is validated
 /// without blocking the main thread. A free `async` function is `nonisolated`,
 /// so the solver runs on the cooperative pool.

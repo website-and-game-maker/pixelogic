@@ -248,6 +248,11 @@ public final class PlayerStore: @unchecked Sendable {
     public func saveUserPuzzle(_ puzzle: StoredPuzzle) {
         var d = data
         if let idx = d.userPuzzles.firstIndex(where: { $0.id == puzzle.id }) {
+            // Editing the art invalidates any saved in-progress board for this id —
+            // otherwise reopening restores stale marks onto the new solution.
+            if d.userPuzzles[idx].solution != puzzle.solution {
+                d.inProgress.removeValue(forKey: puzzle.id)
+            }
             d.userPuzzles[idx] = puzzle
         } else {
             d.userPuzzles.append(puzzle)

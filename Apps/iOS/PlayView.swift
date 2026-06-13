@@ -63,9 +63,10 @@ struct PlayView: View {
         }
         .sheet(isPresented: $vm.showWinSheet) { winSheet }
         .onAppear { vm.setActive(true) }
-        .onDisappear { vm.setActive(false) }
+        .onDisappear { vm.setActive(false); vm.persistNow() }
         .onChange(of: scenePhase) { phase in
             vm.setActive(phase == .active)
+            if phase == .background { vm.persistNow() } // .inactive is transient — don't churn saves
         }
     }
 
