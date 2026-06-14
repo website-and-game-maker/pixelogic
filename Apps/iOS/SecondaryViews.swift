@@ -21,6 +21,15 @@ struct SettingsView: View {
                         ForEach(ClueStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                 }
+                Section {
+                    Link(destination: SuggestionMail.url) {
+                        Label("Send a suggestion", systemImage: "envelope")
+                    }
+                } header: {
+                    Text("Feedback")
+                } footer: {
+                    Text("Have an idea for a puzzle or a feature? Email it straight to the developer.")
+                }
                 Section("Privacy") {
                     Link(destination: URL(string: "https://website-and-game-maker.github.io/pixelogic/#/about")!) {
                         Label("Privacy policy", systemImage: "hand.raised")
@@ -62,6 +71,19 @@ struct SettingsView: View {
             }
         )
     }
+}
+
+// MARK: - Suggestion mail
+
+/// Pre-filled mailto link for sending the developer a suggestion.
+enum SuggestionMail {
+    static let address = "jayanthisaahir@gmail.com"
+    static let url: URL = {
+        let subject = "Pixelogic suggestion"
+        let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        return URL(string: "mailto:\(address)?subject=\(encoded)")
+            ?? URL(string: "mailto:\(address)")!
+    }()
 }
 
 // MARK: - Badge filter
@@ -139,9 +161,13 @@ struct AboutView: View {
         Section(icon: "hand.raised.fill", title: "Your privacy",
                 body: "Pixelogic collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them."),
         Section(icon: "sparkles", title: "Built entirely with AI",
-                body: "Every single line of Pixelogic was written by AI — Anthropic's Claude, working in Claude Code. The logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it AI-authored, steered by a human with opinions about how a logic game should feel. No part of this app was hand-coded by a person.",
+                body: "Every part of Pixelogic — even the idea itself — was conceived and written by Claude, Anthropic's AI, working in Claude Code. The concept, the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it was imagined and authored by AI. No human wrote, designed, or directed any of it; there is no human author.",
                 linkLabel: "Try Claude Code for yourself",
                 linkURL: URL(string: "https://claude.ai/referral/8H3jezX92A")),
+        Section(icon: "envelope", title: "Send a suggestion",
+                body: "Have an idea for a puzzle, a feature, or just a thought to share? Email it straight to the developer — every suggestion is read.",
+                linkLabel: "Email a suggestion",
+                linkURL: SuggestionMail.url),
     ]
 
     var body: some View {
@@ -158,24 +184,108 @@ struct AboutView: View {
                             .lineSpacing(3)
                         if let label = s.linkLabel, let url = s.linkURL {
                             Link(destination: url) {
-                                Label(label, systemImage: "arrow.up.forward.square")
+                                Label(label, systemImage: linkIcon(for: url))
                                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
                                     .foregroundStyle(Theme.primaryDeep)
                             }
                             .padding(.top, 2)
-                            .accessibilityHint("Opens claude.ai in your browser")
+                            .accessibilityHint(url.scheme == "mailto"
+                                               ? "Opens your mail app"
+                                               : "Opens claude.ai in your browser")
                         }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 18).fill(Theme.surface))
                 }
+
+                BadgeLegendCard()
             }
             .padding()
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("About Pixelogic")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func linkIcon(for url: URL) -> String {
+        url.scheme == "mailto" ? "paperplane.fill" : "arrow.up.forward.square"
+    }
+}
+
+// MARK: - Badge legend
+
+/// Explains each badge — colour, glyph, name, blurb — and links to its filter
+/// screen. Matches the About card style.
+private struct BadgeLegendCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Badge legend", systemImage: "rosette")
+                .font(.system(.headline, design: .rounded, weight: .black))
+                .foregroundStyle(Theme.ink)
+            Text("Some pictures wear badges that hint how they're built. Because each trait makes a puzzle a little easier, badges weight your Pixelogic Score. Tap one to browse every puzzle that wears it.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Theme.ink.opacity(0.9))
+                .lineSpacing(3)
+            VStack(spacing: 10) {
+                ForEach(BadgeKey.allCases, id: \.self) { key in
+                    NavigationLink(value: Route.badge(key)) {
+                        BadgeLegendRow(key: key)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Theme.surface))
+    }
+}
+
+private struct BadgeLegendRow: View {
+    let key: BadgeKey
+
+    var body: some View {
+        let colors = Theme.badgeColors(key)
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(colors.bg)
+                Image(systemName: key.glyph)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(colors.fg)
+            }
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(key.name)
+                        .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                        .foregroundStyle(Theme.ink)
+                    Text(String(format: "×%.2g", key.multiplier))
+                        .font(.system(.caption2, design: .rounded, weight: .heavy))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(colors.bg))
+                        .foregroundStyle(colors.fg)
+                }
+                Text(key.blurb)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Theme.inkSoft)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.inkSoft.opacity(0.6))
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.bg))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(key.name) badge. \(key.blurb)")
+        .accessibilityHint("See all \(key.name) puzzles")
     }
 }
 

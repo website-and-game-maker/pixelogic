@@ -1,8 +1,15 @@
-// Pixelogic for Apple Watch — the "pocket set": every 5×5 puzzle, rethought
-// for 5-second wrist sessions. See DESIGN.md for the rationale.
+// Pixelogic for Apple Watch — the "pocket set": small puzzles rethought for
+// 5-second wrist sessions. See DESIGN.md for the rationale. The app keeps its
+// clean board + scrolling list, and now adds difficulty sections, non-clickable
+// badge indicators, a legend, a wrist-sized Tutorial / About / Settings, and a
+// scene-aware play timer driven by PixelogicKit's GameSession.
 
 import SwiftUI
 import PixelogicKit
+
+#if canImport(WatchKit)
+import WatchKit
+#endif
 
 // Disambiguate from SwiftUI.Grid (a layout view) across this target.
 typealias Grid = PixelogicKit.Grid
@@ -35,29 +42,74 @@ final class WatchProgress: ObservableObject {
     }
 }
 
-/// The wrist-sized library: every 5×5 (cells stay at/above the 7 mm touch minimum).
-let watchLibrary: [Puzzle] = library.filter { $0.width == 5 && $0.height == 5 }
+// MARK: - Wrist-sized library
+
+/// Larger watches (≈ ≥ 195 pt wide) can host 7×7 cells at/above the touch
+/// minimum; smaller watches stay 5×5-only. Detected once at launch.
+let isLargeWatch: Bool = {
+    #if canImport(WatchKit)
+    return WKInterfaceDevice.current().screenBounds.width >= 195
+    #else
+    return false
+    #endif
+}()
+
+/// Maximum board dimension this watch can comfortably render.
+let watchMaxDim = isLargeWatch ? 7 : 5
+
+/// The wrist-sized library: every 5×5, plus 7×7 on larger watches.
+let watchLibrary: [Puzzle] = library.filter {
+    $0.width <= watchMaxDim && $0.height <= watchMaxDim
+}
+
+/// The wrist library grouped by difficulty, in ascending tier order, keeping
+/// only tiers that actually have watch-sized puzzles.
+let watchSections: [(tier: Difficulty, puzzles: [Puzzle])] = Difficulty.ordered.compactMap { tier in
+    let ps = watchLibrary.filter { $0.difficulty == tier }
+    return ps.isEmpty ? nil : (tier, ps)
+}
+
+// MARK: - Home
 
 struct WatchHomeView: View {
     @StateObject private var progress = WatchProgress()
+    @AppStorage("pixelogic.watch.tourSeen") private var tourSeen = false
+    @State private var showTutorial = false
 
     var body: some View {
-        List(watchLibrary) { p in
-            NavigationLink {
-                WatchPlayView(puzzle: p, progress: progress)
-            } label: {
-                HStack {
-                    Image(systemName: progress.completed.contains(p.id) ? "checkmark.circle.fill" : "circle.dotted")
-                        .foregroundStyle(progress.completed.contains(p.id) ? .teal : .secondary)
-                    Text(p.title)
-                        .font(.system(.body, design: .rounded, weight: .semibold))
+        List {
+            ForEach(watchSections, id: \.tier) { section in
+                Section {
+                    ForEach(section.puzzles) { p in
+                        NavigationLink {
+                            WatchPlayView(puzzle: p, progress: progress)
+                        } label: {
+                            WatchPuzzleRow(puzzle: p, done: progress.completed.contains(p.id))
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(WatchPalette.color(for: section.tier))
+                            .frame(width: 8, height: 8)
+                        Text(section.tier.displayName)
+                    }
                 }
             }
         }
         .navigationTitle("Pixelogic")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink {
+                    WatchMoreView()
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .overlay(alignment: .bottom) {
             let done = watchLibrary.filter { progress.completed.contains($0.id) }.count
-            if done == watchLibrary.count {
+            if !watchLibrary.isEmpty && done == watchLibrary.count {
                 Text("Pocket set complete! 🌿")
                     .font(.footnote.bold())
                     .padding(.horizontal, 10)
@@ -65,144 +117,50 @@ struct WatchHomeView: View {
                     .background(Capsule().fill(Color.teal.opacity(0.28))) // Material is watchOS 10+
             }
         }
+        .sheet(isPresented: $showTutorial) {
+            NavigationStack {
+                WatchTutorialView(onFinish: { showTutorial = false })
+            }
+        }
+        .onAppear {
+            if !tourSeen {
+                tourSeen = true
+                showTutorial = true
+            }
+        }
     }
 }
 
-struct WatchPlayView: View {
+/// A single puzzle row: completion dot, title, and non-clickable badge indicators.
+struct WatchPuzzleRow: View {
     let puzzle: Puzzle
-    @ObservedObject var progress: WatchProgress
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var session: GameSession
-    @State private var marks: Grid
-    @State private var crossMode = false
-    @State private var won = false
-
-    init(puzzle: Puzzle, progress: WatchProgress) {
-        self.puzzle = puzzle
-        self.progress = progress
-        let s = GameSession(puzzle: puzzle)
-        _session = State(initialValue: s)
-        _marks = State(initialValue: s.marks)
-    }
+    let done: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
-            WatchBoardView(puzzle: puzzle, marks: marks, won: won) { r, c in
-                guard !won else { return }
-                session.mode = crossMode ? .cross : .paint
-                session.toggle(r, c)
-                marks = session.marks
-                WKInterfaceDevice.current().play(.click)
-                if session.isSolved {
-                    won = true
-                    progress.markCompleted(puzzle.id)
-                    WKInterfaceDevice.current().play(.success)
-                }
-            }
-
-            if won {
-                Button {
-                    dismiss()
-                } label: {
-                    Label("Solved \(puzzle.title)!", systemImage: "checkmark.seal.fill")
-                        .font(.footnote.bold())
-                }
-                .tint(.teal)
-            } else {
-                // One giant mode toggle — the only control on the wrist.
-                Button {
-                    crossMode.toggle()
-                    WKInterfaceDevice.current().play(.click)
-                } label: {
-                    Label(crossMode ? "Crossing" : "Painting", systemImage: crossMode ? "xmark" : "paintbrush.fill")
-                        .font(.footnote.bold())
-                        .frame(maxWidth: .infinity)
-                }
-                .tint(crossMode ? .gray : .teal)
-            }
+        HStack(spacing: 8) {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted")
+                .foregroundStyle(done ? .teal : .secondary)
+            Text(puzzle.title)
+                .font(.system(.body, design: .rounded, weight: .semibold))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            WatchBadgeStrip(badges: puzzleBadges(puzzle))
         }
-        .navigationTitle(puzzle.title)
     }
 }
 
-/// Compact board renderer: clue rails + tappable cells, tuned for 40–45 mm.
-struct WatchBoardView: View {
-    let puzzle: Puzzle
-    let marks: Grid
-    let won: Bool
-    let onTap: (Int, Int) -> Void
+/// Compact, NON-clickable badge indicators: a colored geometric glyph each.
+struct WatchBadgeStrip: View {
+    let badges: [Badge]
 
     var body: some View {
-        GeometryReader { geo in
-            // Rails sized independently: row clues take width, column clues
-            // take height (a board can have deep column stacks but short rows).
-            let rowSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.rowClues.map(\.count).max() ?? 1))
-            let colSpan: CGFloat = 0.62 * CGFloat(max(1, puzzle.colClues.map(\.count).max() ?? 1))
-            let cell = min(
-                geo.size.width / (CGFloat(puzzle.width) + rowSpan),
-                geo.size.height / (CGFloat(puzzle.height) + colSpan)
-            )
-            let ox = rowSpan * cell
-            let oy = colSpan * cell
-
-            ZStack(alignment: .topLeading) {
-                // Clue rails
-                ForEach(0..<puzzle.width, id: \.self) { c in
-                    let nums = puzzle.colClues[c].isEmpty ? [0] : puzzle.colClues[c]
-                    VStack(spacing: 0) {
-                        ForEach(Array(nums.enumerated()), id: \.offset) { _, n in
-                            Text("\(n)").font(.system(size: cell * 0.42, weight: .heavy, design: .rounded))
-                        }
-                    }
-                    .frame(width: cell)
-                    .position(x: ox + CGFloat(c) * cell + cell / 2, y: oy / 2)
-                }
-                ForEach(0..<puzzle.height, id: \.self) { r in
-                    let nums = puzzle.rowClues[r].isEmpty ? [0] : puzzle.rowClues[r]
-                    HStack(spacing: 2) {
-                        ForEach(Array(nums.enumerated()), id: \.offset) { _, n in
-                            Text("\(n)").font(.system(size: cell * 0.42, weight: .heavy, design: .rounded))
-                        }
-                    }
-                    .frame(height: cell)
-                    .position(x: ox / 2, y: oy + CGFloat(r) * cell + cell / 2)
-                }
-
-                // Cells
-                ForEach(0..<puzzle.height, id: \.self) { r in
-                    ForEach(0..<puzzle.width, id: \.self) { c in
-                        cellView(r, c, size: cell)
-                            .position(x: ox + CGFloat(c) * cell + cell / 2, y: oy + CGFloat(r) * cell + cell / 2)
-                    }
-                }
+        HStack(spacing: 3) {
+            ForEach(badges, id: \.key) { badge in
+                Image(systemName: badge.key.glyph)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(WatchPalette.color(for: badge.key))
+                    .accessibilityHidden(true)
             }
         }
-        .aspectRatio(1, contentMode: .fit)
-    }
-
-    @ViewBuilder
-    private func cellView(_ r: Int, _ c: Int, size: CGFloat) -> some View {
-        let mark = marks[r][c]
-        Button {
-            onTap(r, c)
-        } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(mark == .filled ? Color.teal : Color.white.opacity(0.14))
-                if mark == .empty {
-                    Image(systemName: "xmark")
-                        .font(.system(size: size * 0.4, weight: .bold))
-                        .foregroundStyle(.gray)
-                }
-            }
-            .frame(width: size - 1.5, height: size - 1.5)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Row \(r + 1) column \(c + 1)\(mark == .filled ? ", filled" : mark == .empty ? ", crossed" : "")")
     }
 }
-
-#if canImport(WatchKit)
-import WatchKit
-#endif
