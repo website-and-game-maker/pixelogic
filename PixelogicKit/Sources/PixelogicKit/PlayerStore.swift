@@ -82,6 +82,8 @@ public struct SaveData: Codable, Sendable {
     public var assists: [String: AssistTally] = [:]
     /// Player-created puzzles.
     public var userPuzzles: [StoredPuzzle] = []
+    /// Player-generated puzzles (separate "Generated" library).
+    public var generatedPuzzles: [StoredPuzzle] = []
     public var settings = GameSettings()
     public var tutorialSeen = false
     /// True once the post-tutorial feature tour has been shown.
@@ -93,7 +95,7 @@ public struct SaveData: Codable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case completed, bestTimes, bestScores, assists, userPuzzles,
+        case completed, bestTimes, bestScores, assists, userPuzzles, generatedPuzzles,
              settings, tutorialSeen, tourSeen, progressReset, inProgress
     }
 
@@ -115,6 +117,11 @@ public struct SaveData: Codable, Sendable {
             userPuzzles = (wrapped ?? []).compactMap(\.value)
         } else {
             userPuzzles = []
+        }
+        if let wrapped = try? c.decodeIfPresent([Failable<StoredPuzzle>].self, forKey: .generatedPuzzles) {
+            generatedPuzzles = (wrapped ?? []).compactMap(\.value)
+        } else {
+            generatedPuzzles = []
         }
         settings = field(GameSettings.self, .settings, GameSettings())
         tutorialSeen = field(Bool.self, .tutorialSeen, false)
@@ -283,6 +290,29 @@ public final class PlayerStore: @unchecked Sendable {
     public func deleteUserPuzzles(ids: Set<String>) {
         var d = data
         d.userPuzzles.removeAll { ids.contains($0.id) }
+        for id in ids { d.inProgress.removeValue(forKey: id) }
+        data = d
+    }
+
+    // MARK: - Generated puzzles (separate library, kept across resets)
+
+    public var generatedPuzzles: [StoredPuzzle] { data.generatedPuzzles }
+
+    /// Save a generated puzzle. An identical picture already saved is reused
+    /// (no duplicate cards). Returns the id (always prefixed "g-").
+    @discardableResult
+    public func saveGeneratedPuzzle(title: String, solution: [[Bool]]) -> String {
+        if let existing = data.generatedPuzzles.first(where: { $0.solution == solution }) { return existing.id }
+        let id = "g-\(UUID().uuidString.prefix(8))"
+        var d = data
+        d.generatedPuzzles.append(StoredPuzzle(id: id, title: title, solution: solution))
+        data = d
+        return id
+    }
+
+    public func deleteGeneratedPuzzles(ids: Set<String>) {
+        var d = data
+        d.generatedPuzzles.removeAll { ids.contains($0.id) }
         for id in ids { d.inProgress.removeValue(forKey: id) }
         data = d
     }

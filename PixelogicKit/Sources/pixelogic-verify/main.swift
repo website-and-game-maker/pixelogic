@@ -284,6 +284,37 @@ let ads = AdSlots.current()
 check(AdPlacement.allCases.allSatisfy { !ads.hasAd(for: $0) }, "no placement has an ad")
 check(!ads.interstitialAllowed(after: 1000), "no interstitials")
 
+// MARK: - Generator
+print("Generator:")
+var genRNG = SeededGenerator(seed: 99)
+for size in [5, 7, 8, 10] {
+    guard let g = generatePuzzle(size: size, using: &genRNG) else { check(false, "generated \(size)x\(size)"); continue }
+    check(g.width == size && g.height == size, "gen \(size): correct size")
+    check(hasUniqueSolution(g.rowClues, g.colClues), "gen \(size): unique")
+    check(isLogicSolvable(g.rowClues, g.colClues), "gen \(size): logic-solvable")
+    check(gradeGrid(g.solution) == g.difficulty, "gen \(size): tier matches engine")
+    check(!g.named && g.id.hasPrefix("g-"), "gen \(size): untitled g- id, no name-hint")
+    let f = g.solution.flatMap { $0 }.filter { $0 }.count
+    check(f >= size && f <= size * size - size, "gen \(size): not degenerate")
+}
+var detA = SeededGenerator(seed: 5), detB = SeededGenerator(seed: 5)
+check(generatePuzzle(size: 8, using: &detA)?.solution == generatePuzzle(size: 8, using: &detB)?.solution, "seeded generation is deterministic")
+check(generatePuzzle(size: 4, using: &genRNG) == nil && generatePuzzle(size: 16, using: &genRNG) == nil, "out-of-range sizes refused")
+
+// MARK: - Generated puzzles in the store
+print("Generated store:")
+let gStore = PlayerStore(defaults: UserDefaults(suiteName: "verify.gen.\(UUID().uuidString)")!)
+let gArt = grid(["##", "#."])
+let gid1 = gStore.saveGeneratedPuzzle(title: "A", solution: gArt)
+let gid2 = gStore.saveGeneratedPuzzle(title: "B", solution: gArt)
+check(gid1.hasPrefix("g-") && gid1 == gid2 && gStore.generatedPuzzles.count == 1, "generated save dedups identical art")
+gStore.resetProgress()
+check(gStore.generatedPuzzles.count == 1, "generated puzzles survive reset")
+gStore.deleteGeneratedPuzzles(ids: [gid1])
+check(gStore.generatedPuzzles.isEmpty, "generated delete works")
+let gOld = PlayerStore(defaults: { let d = UserDefaults(suiteName: "verify.gold.\(UUID().uuidString)")!; d.set(Data("{\"userPuzzles\":[]}".utf8), forKey: PlayerStore.storageKey); return d }())
+check(gOld.generatedPuzzles.isEmpty, "older save without the key decodes to empty")
+
 // MARK: - Library invariants (the shipping guarantee)
 print("Library (32 puzzles × invariants):")
 check(library.count >= 30, "healthy library size (\(library.count))")

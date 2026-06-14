@@ -394,3 +394,57 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(store.inProgress(for: "u-e") == nil)
     }
 }
+
+// MARK: - Generator & generated store
+
+@Suite struct GeneratorTests {
+    @Test func producesValidUniqueLogicSolvablePuzzles() throws {
+        for size in [5, 7, 8, 10] {
+            var rng = SeededGenerator(seed: UInt64(size) &* 1234567)
+            let puzzle = try #require(generatePuzzle(size: size, using: &rng))
+            #expect(puzzle.width == size && puzzle.height == size)
+            #expect(puzzle.id.hasPrefix("g-") && !puzzle.named)
+            #expect(hasUniqueSolution(puzzle.rowClues, puzzle.colClues))
+            #expect(isLogicSolvable(puzzle.rowClues, puzzle.colClues))
+            #expect(gradeGrid(puzzle.solution) == puzzle.difficulty)
+            let filled = puzzle.solution.flatMap { $0 }.filter { $0 }.count
+            #expect(filled >= size && filled <= size * size - size)
+        }
+    }
+    @Test func deterministicForASeed() {
+        var a = SeededGenerator(seed: 42), b = SeededGenerator(seed: 42)
+        #expect(generatePuzzle(size: 8, using: &a)?.solution == generatePuzzle(size: 8, using: &b)?.solution)
+    }
+    @Test func rejectsOutOfRangeSizes() {
+        var rng = SeededGenerator(seed: 1)
+        #expect(generatePuzzle(size: 4, using: &rng) == nil)
+        #expect(generatePuzzle(size: 16, using: &rng) == nil)
+    }
+    @Test func submittableGate() {
+        var rng = SeededGenerator(seed: 7)
+        for _ in 0..<40 {
+            if let g = generatePuzzle(size: 8, using: &rng), g.difficulty != .easy {
+                #expect(isWorthSubmitting(g)); return
+            }
+        }
+    }
+}
+
+@Suite struct GeneratedStoreTests {
+    @Test func saveDedupResetDelete() {
+        let s = PlayerStore(defaults: UserDefaults(suiteName: "t.gen.\(UUID().uuidString)")!)
+        let art = bitmapToGrid(["##", "#."])
+        let id1 = s.saveGeneratedPuzzle(title: "A", solution: art)
+        let id2 = s.saveGeneratedPuzzle(title: "B", solution: art)
+        #expect(id1.hasPrefix("g-") && id1 == id2 && s.generatedPuzzles.count == 1)
+        s.resetProgress()
+        #expect(s.generatedPuzzles.count == 1)
+        s.deleteGeneratedPuzzles(ids: [id1])
+        #expect(s.generatedPuzzles.isEmpty)
+    }
+    @Test func olderSaveDecodesToEmpty() {
+        let d = UserDefaults(suiteName: "t.gen2.\(UUID().uuidString)")!
+        d.set(Data(#"{"userPuzzles":[]}"#.utf8), forKey: PlayerStore.storageKey)
+        #expect(PlayerStore(defaults: d).generatedPuzzles.isEmpty)
+    }
+}
