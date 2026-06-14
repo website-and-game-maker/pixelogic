@@ -187,6 +187,26 @@ private let entries: [Entry] = [
             "...#.##.##.##..", ".#.#.#..#..#...", "..##.#..##...#.",
           ],
           note: "Scattered light across 15×15 — find the order hidden in the chaos."),
+
+    // ---------- 7×7 pocket set (playable on larger Apple Watches) ----------
+    // Every one is engine-verified: provably unique, solvable by pure line logic,
+    // and its difficulty is the grader's own verdict.
+    Entry(id: "plus7", title: "Big Plus", difficulty: .easy,
+          bitmap: ["...#...", "...#...", "...#...", "#######", "...#...", "...#...", "...#..."]),
+    Entry(id: "hourglass7", title: "Hourglass", difficulty: .easy,
+          bitmap: ["#######", ".#####.", "..###..", "...#...", "..###..", ".#####.", "#######"]),
+    Entry(id: "mug7", title: "Mug", difficulty: .easy,
+          bitmap: ["#######", ".#####.", ".#####.", ".#####.", "..###..", "..###..", "#######"]),
+    Entry(id: "diamond7", title: "Cut Diamond", difficulty: .medium,
+          bitmap: ["...#...", "..###..", ".#####.", "#######", ".#####.", "..###..", "...#..."]),
+    Entry(id: "heart7", title: "Plump Heart", difficulty: .medium,
+          bitmap: [".##.##.", "#######", "#######", "#######", ".#####.", "..###..", "...#..."]),
+    Entry(id: "bowtie7", title: "Bow Tie", difficulty: .medium,
+          bitmap: ["#.....#", "##...##", "#.#.#.#", "#..#..#", "#.#.#.#", "##...##", "#.....#"]),
+    Entry(id: "tree7", title: "Sapling", difficulty: .medium,
+          bitmap: ["...#...", "..###..", ".#####.", "#######", "..###..", "...#...", "..###.."]),
+    Entry(id: "spade7", title: "Spade", difficulty: .medium,
+          bitmap: ["...#...", "..###..", ".#####.", "#######", "#######", "...#...", "..###.."]),
 ]
 
 /// The built-in puzzle library, in menu order.

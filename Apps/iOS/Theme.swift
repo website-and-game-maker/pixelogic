@@ -90,16 +90,102 @@ struct DifficultyChip: View {
     }
 }
 
-/// A tappable badge chip that opens the badge's filter screen.
+/// A non-clickable badge indicator: tinted pill with the badge's geometric
+/// SF Symbol and a short label. Badge filtering stays reachable elsewhere
+/// (the About legend, the symmetry strip), so the chip itself is purely a
+/// visual trait marker and never steals a tap from the puzzle card.
 struct BadgeChipView: View {
     let badge: Badge
+
     var body: some View {
         let colors = Theme.badgeColors(badge.key)
-        NavigationLink(value: Route.badge(badge.key)) {
-            Chip(text: badge.label, bg: colors.bg, fg: colors.fg)
+        HStack(spacing: 4) {
+            Image(systemName: badge.key.glyph)
+                .font(.system(size: 9, weight: .black))
+            Text(shortLabel)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("See all \(badge.key.name) puzzles")
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(colors.bg))
+        .foregroundStyle(colors.fg)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(badge.key.name)
+    }
+
+    /// The stored label carries a leading unicode glyph (e.g. "◈ Symmetric ·
+    /// H+V"); the SF Symbol replaces it, so strip that prefix to avoid a
+    /// double icon.
+    private var shortLabel: String {
+        var s = badge.label
+        if let first = s.first, first == badge.key.icon.first {
+            s.removeFirst()
+        }
+        return s.trimmingCharacters(in: .whitespaces)
+    }
+}
+
+/// A wrapping row layout (SwiftUI `Layout`, iOS 16+): lays children left to
+/// right, wrapping to a new line when the next child would overflow the
+/// proposed width. Used for chip rows so badges never clip on narrow screens.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = arrange(subviews: subviews, maxWidth: maxWidth)
+        let width: CGFloat = rows.map { row in
+            row.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(max(0, row.count - 1))
+        }.max() ?? 0
+        let height: CGFloat = rows.reduce(0) { partial, row in
+            partial + (row.map(\.size.height).max() ?? 0)
+        } + lineSpacing * CGFloat(max(0, rows.count - 1))
+        // When unconstrained, report the natural single-line width.
+        let reportedWidth = proposal.width == nil ? width : min(width, maxWidth)
+        return CGSize(width: reportedWidth, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        let maxWidth = bounds.width
+        let rows = arrange(subviews: subviews, maxWidth: maxWidth)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            let rowHeight = row.map(\.size.height).max() ?? 0
+            for item in row {
+                item.subview.place(
+                    at: CGPoint(x: x, y: y + (rowHeight - item.size.height) / 2),
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+            y += rowHeight + lineSpacing
+        }
+    }
+
+    private struct Item {
+        let subview: LayoutSubview
+        let size: CGSize
+    }
+
+    private func arrange(subviews: Subviews, maxWidth: CGFloat) -> [[Item]] {
+        var rows: [[Item]] = []
+        var row: [Item] = []
+        var x: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let needed = (row.isEmpty ? 0 : spacing) + size.width
+            if !row.isEmpty, x + needed > maxWidth {
+                rows.append(row)
+                row = []
+                x = 0
+            }
+            row.append(Item(subview: subview, size: size))
+            x += (row.count == 1 ? 0 : spacing) + size.width
+        }
+        if !row.isEmpty { rows.append(row) }
+        return rows
     }
 }
 

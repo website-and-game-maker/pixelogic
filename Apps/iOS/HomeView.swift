@@ -1,5 +1,5 @@
 // Home: brand, tagline, laurel Pixelogic Score, actions, tier sections with
-// score/time cards + clickable badge chips, My Puzzles with manage mode —
+// score/time cards + badge trait chips, My Puzzles with manage mode —
 // the web menu, translated to an adaptive iPhone/iPad grid.
 
 import SwiftUI
@@ -245,11 +245,17 @@ struct HomeView: View {
 }
 
 /// A library/custom puzzle card: score pill top-left, best time top-right,
-/// title, then difficulty + badge chips.
+/// title, then difficulty + badge trait chips. The whole card is the single
+/// tap target that plays the puzzle; the badge chips are non-clickable
+/// indicators that wrap onto extra lines when several apply.
 struct PuzzleCard: View {
     let puzzle: Puzzle
     let store: PlayerStore
     var selected = false
+
+    private var badges: [Badge] {
+        puzzleBadges(solution: puzzle.solution, named: puzzle.named)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -273,13 +279,16 @@ struct PuzzleCard: View {
             Text(puzzle.title)
                 .font(.system(.headline, design: .rounded, weight: .heavy))
                 .foregroundStyle(Theme.ink)
-            HStack(spacing: 4) {
+            FlowLayout(spacing: 4, lineSpacing: 6) {
                 DifficultyChip(difficulty: puzzle.difficulty)
-                ForEach(puzzleBadges(solution: puzzle.solution, named: puzzle.named), id: \.key) {
+                ForEach(badges, id: \.key) {
                     BadgeChipView(badge: $0)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Extra breathing room when several badges stack, so the chips
+            // aren't cramped and the card stays comfortable to tap.
+            .padding(.bottom, badges.count >= 2 ? 4 : 0)
             Text("\(puzzle.width) × \(puzzle.height)")
                 .font(.system(.caption2, design: .rounded, weight: .bold))
                 .foregroundStyle(Theme.inkSoft)

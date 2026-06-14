@@ -9,6 +9,8 @@ final class AppModel: ObservableObject {
     @Published var path = NavigationPath()
     @Published var showSettings = false
     @Published var showTutorial = false
+    /// The card-based feature tour, shown once after the first-launch tutorial.
+    @Published var showTour = false
     /// Surfaced when a shared link can't be opened (junk, or a non-unique puzzle).
     @Published var importError: String?
 
@@ -58,13 +60,25 @@ struct PixelogicApp: App {
             .sheet(isPresented: $app.showSettings) {
                 SettingsView().environmentObject(app)
             }
-            .fullScreenCover(isPresented: $app.showTutorial) {
+            .fullScreenCover(isPresented: $app.showTutorial, onDismiss: {
+                // Right after the first-launch tutorial dismisses, hand off to the
+                // feature tour — but only once, and never over a deep-linked puzzle.
+                if !app.store.tourSeen && app.path.isEmpty { app.showTour = true }
+            }) {
                 TutorialView().environmentObject(app)
+            }
+            .fullScreenCover(isPresented: $app.showTour) {
+                TourView().environmentObject(app)
             }
             .onAppear {
                 // First-ever launch: show the tutorial before the menu — unless a
                 // deep link has already pushed a puzzle (path non-empty).
                 if !app.store.tutorialSeen && app.path.isEmpty { app.showTutorial = true }
+                // Existing users who've seen the tutorial but predate the tour get
+                // it once, on the menu only (never over a deep-linked puzzle).
+                else if app.store.tutorialSeen && !app.store.tourSeen && app.path.isEmpty {
+                    app.showTour = true
+                }
             }
             .onOpenURL { url in
                 openSharedPuzzle(url)
@@ -96,6 +110,7 @@ struct PixelogicApp: App {
             }
             // Success: clear whatever's covering the stack, then open the puzzle.
             app.showTutorial = false
+            app.showTour = false
             app.showSettings = false
             let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
             app.path = NavigationPath()

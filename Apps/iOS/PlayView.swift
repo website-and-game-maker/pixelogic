@@ -72,11 +72,16 @@ struct PlayView: View {
 
     private var header: some View {
         VStack(spacing: 6) {
-            HStack(spacing: 6) {
+            // Chips wrap onto extra lines on narrow screens (iPhone SE) so
+            // badges never overflow or clip; badge chips are non-clickable
+            // trait indicators.
+            FlowLayout(spacing: 6, lineSpacing: 6) {
                 DifficultyChip(difficulty: vm.puzzle.difficulty)
                 Chip(text: "\(vm.puzzle.width) × \(vm.puzzle.height)", bg: Theme.surface2, fg: Theme.inkSoft)
                 ForEach(vm.badges, id: \.key) { BadgeChipView(badge: $0) }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal)
             if vm.isLibrary {
                 HStack {
                     navArrow("chevron.left", label: "Previous puzzle", offset: -1)
