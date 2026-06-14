@@ -13,6 +13,8 @@ struct GeneratorView: View {
     @State private var puzzle: Puzzle?
     @State private var working = false
     @State private var failed = false
+    /// Monotonic id for the latest generation request; stale tasks self-cancel.
+    @State private var requestToken = 0
 
     private let sizes = [5, 7, 8, 10]
 
@@ -24,7 +26,8 @@ struct GeneratorView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .onChange(of: size) { _ in puzzle = nil; failed = false }
+                .disabled(working)
+                .onChange(of: size) { _ in generate() } // switching size starts a fresh run
 
                 Text("Every generated puzzle has exactly one solution and is solvable by pure logic — its difficulty is the engine's own verdict.")
                     .font(.system(.footnote, design: .rounded, weight: .bold))
@@ -64,6 +67,7 @@ struct GeneratorView: View {
     @ViewBuilder
     private func preview(_ puzzle: Puzzle) -> some View {
         let badges = puzzleBadges(puzzle)
+        let worth = isWorthSubmitting(puzzle)
         VStack(spacing: 12) {
             FlowLayout(spacing: 6, lineSpacing: 6) {
                 DifficultyChip(difficulty: puzzle.difficulty)
@@ -90,7 +94,7 @@ struct GeneratorView: View {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
 
-                if isWorthSubmitting(puzzle) {
+                if worth {
                     Link(destination: sendURL(for: puzzle)) {
                         Label("Send to developer", systemImage: "paperplane")
                     }
@@ -100,7 +104,7 @@ struct GeneratorView: View {
             .font(.system(.subheadline, design: .rounded, weight: .heavy))
             .padding(.horizontal)
 
-            if !isWorthSubmitting(puzzle) {
+            if !worth {
                 Text("Generate a trickier one (Medium+ or with a badge) to send it in.")
                     .font(.system(.caption, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.inkSoft)
@@ -109,13 +113,17 @@ struct GeneratorView: View {
     }
 
     private func generate() {
+        requestToken += 1
+        let token = requestToken
         working = true
         failed = false
+        puzzle = nil
         let s = size
         Task {
             let made = await Self.make(size: s)
+            guard token == requestToken else { return } // a newer request superseded this one
             working = false
-            if let made { puzzle = made } else { puzzle = nil; failed = true }
+            if let made { puzzle = made } else { failed = true }
         }
     }
 
@@ -127,12 +135,7 @@ struct GeneratorView: View {
 
     private func sendURL(for puzzle: Puzzle) -> URL {
         let link = webShareURL(forToken: encodePuzzle(puzzle.solution, title: puzzle.title)).absoluteString
-        let subject = "Pixelogic generated puzzle"
         let body = "I generated a \(puzzle.width)×\(puzzle.height) \(puzzle.difficulty.displayName) puzzle worth sharing:\n\n\(link)"
-        var comps = URLComponents()
-        comps.scheme = "mailto"
-        comps.path = "jayanthisaahir@gmail.com"
-        comps.queryItems = [URLQueryItem(name: "subject", value: subject), URLQueryItem(name: "body", value: body)]
-        return comps.url ?? URL(string: "mailto:jayanthisaahir@gmail.com")!
+        return SuggestionMail.url(subject: "Pixelogic generated puzzle", body: body)
     }
 }

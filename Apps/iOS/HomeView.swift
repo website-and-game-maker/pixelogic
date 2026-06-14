@@ -258,10 +258,12 @@ struct HomeView: View {
                 }
                 .font(.system(.footnote, design: .rounded, weight: .bold))
 
-                // Divided by the engine's graded difficulty, like the main library.
+                // Grade each stored puzzle once (gradeGrid runs the solver), then
+                // group by the engine's verdict — like the main library's divisions.
+                let graded = gens.map { (stored: $0, puzzle: $0.asPuzzle) }
+                let byTier = Dictionary(grouping: graded, by: { $0.puzzle.difficulty })
                 ForEach(Difficulty.ordered, id: \.self) { tier in
-                    let tierGens = gens.filter { gradeGrid($0.solution) == tier }
-                    if !tierGens.isEmpty {
+                    if let tierGens = byTier[tier], !tierGens.isEmpty {
                         HStack(spacing: 8) {
                             DifficultyChip(difficulty: tier)
                             Text("\(tierGens.count)")
@@ -270,7 +272,9 @@ struct HomeView: View {
                         }
                         .padding(.top, 2)
                         LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(tierGens) { generatedCard($0) }
+                            ForEach(tierGens, id: \.stored.id) { item in
+                                generatedCard(item.stored, puzzle: item.puzzle)
+                            }
                         }
                     }
                 }
@@ -278,9 +282,8 @@ struct HomeView: View {
         }
     }
 
-    private func generatedCard(_ stored: StoredPuzzle) -> some View {
-        let p = stored.asPuzzle
-        return Group {
+    private func generatedCard(_ stored: StoredPuzzle, puzzle p: Puzzle) -> some View {
+        Group {
             if managingGenerated {
                 Button {
                     if selectedGenerated.contains(stored.id) { selectedGenerated.remove(stored.id) } else { selectedGenerated.insert(stored.id) }

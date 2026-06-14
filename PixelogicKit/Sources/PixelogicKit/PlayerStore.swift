@@ -302,7 +302,14 @@ public final class PlayerStore: @unchecked Sendable {
     /// (no duplicate cards). Returns the id (always prefixed "g-").
     @discardableResult
     public func saveGeneratedPuzzle(title: String, solution: [[Bool]]) -> String {
-        if let existing = data.generatedPuzzles.first(where: { $0.solution == solution }) { return existing.id }
+        if let idx = data.generatedPuzzles.firstIndex(where: { $0.solution == solution }) {
+            // Same picture already saved: keep its id but adopt the title the
+            // player just previewed, so the saved card matches what they saw.
+            if data.generatedPuzzles[idx].title != title {
+                var d = data; d.generatedPuzzles[idx].title = title; data = d
+            }
+            return data.generatedPuzzles[idx].id
+        }
         let id = "g-\(UUID().uuidString.prefix(8))"
         var d = data
         d.generatedPuzzles.append(StoredPuzzle(id: id, title: title, solution: solution))
