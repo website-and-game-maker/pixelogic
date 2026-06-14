@@ -20,6 +20,16 @@ public enum BadgeKey: String, CaseIterable, Sendable {
         }
     }
 
+    /// A small geometric SF Symbol for the badge — used where a compact,
+    /// non-clickable indicator is wanted (puzzle tiles, the watch, legends).
+    public var glyph: String {
+        switch self {
+        case .symmetric: "rhombus.fill"
+        case .named: "tag.fill"
+        case .patterned: "square.grid.3x3.fill"
+        }
+    }
+
     public var multiplier: Double {
         switch self {
         case .symmetric: 0.85

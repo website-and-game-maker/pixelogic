@@ -84,6 +84,8 @@ public struct SaveData: Codable, Sendable {
     public var userPuzzles: [StoredPuzzle] = []
     public var settings = GameSettings()
     public var tutorialSeen = false
+    /// True once the post-tutorial feature tour has been shown.
+    public var tourSeen = false
     /// True once progress has ever been wiped — disclosed when sharing a score.
     public var progressReset = false
     /// Unfinished attempts, per puzzle id (board + clock + assists).
@@ -92,7 +94,7 @@ public struct SaveData: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case completed, bestTimes, bestScores, assists, userPuzzles,
-             settings, tutorialSeen, progressReset, inProgress
+             settings, tutorialSeen, tourSeen, progressReset, inProgress
     }
 
     /// Every field decodes independently with a default, so a save written by
@@ -116,6 +118,7 @@ public struct SaveData: Codable, Sendable {
         }
         settings = field(GameSettings.self, .settings, GameSettings())
         tutorialSeen = field(Bool.self, .tutorialSeen, false)
+        tourSeen = field(Bool.self, .tourSeen, false)
         progressReset = field(Bool.self, .progressReset, false)
         inProgress = field([String: InProgressAttempt].self, .inProgress, [:])
     }
@@ -165,6 +168,11 @@ public final class PlayerStore: @unchecked Sendable {
     public var tutorialSeen: Bool {
         get { data.tutorialSeen }
         set { data.tutorialSeen = newValue }
+    }
+
+    public var tourSeen: Bool {
+        get { data.tourSeen }
+        set { data.tourSeen = newValue }
     }
 
     // MARK: - Completion / times / scores
