@@ -103,6 +103,19 @@ required-reason API rules. Each item cites the guideline.
     statements — the app targets can't be compiled on this machine, so exotic
     expression syntax was replaced with the unambiguous statement form.
 
+## Generated puzzles (added 2026-06-13)
+
+The in-app generator produces only **line-solvable** grids, which are
+mathematically guaranteed to have exactly one solution and to be solvable by
+pure logic — so generated puzzles uphold the same guarantee as the curated
+library (verified by `pixelogic-verify`). They are graded by the engine
+(easy–hard; expert/MAX never arise from line-solvable grids), carry only
+auto-detected badges (symmetric/patterned — never name-hint, since titles are
+generic), persist in a separate **Generated** library that survives a progress
+reset, share via the existing web-compatible token, and can be emailed to the
+developer when interesting. No new data collection, no network — generation is
+entirely on-device.
+
 ## Remaining human steps (cannot be done on this machine — no Xcode/simulators)
 
 1. `brew install xcodegen && xcodegen generate` → open `Pixelogic.xcodeproj`.

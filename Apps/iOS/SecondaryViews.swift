@@ -75,15 +75,22 @@ struct SettingsView: View {
 
 // MARK: - Suggestion mail
 
-/// Pre-filled mailto link for sending the developer a suggestion.
+/// Pre-filled mailto links to the developer. Single source of the address.
 enum SuggestionMail {
     static let address = "jayanthisaahir@gmail.com"
-    static let url: URL = {
-        let subject = "Pixelogic suggestion"
-        let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
-        return URL(string: "mailto:\(address)?subject=\(encoded)")
-            ?? URL(string: "mailto:\(address)")!
-    }()
+
+    /// A mailto: URL with an optional subject and body, both percent-encoded.
+    static func url(subject: String = "Pixelogic suggestion", body: String? = nil) -> URL {
+        var comps = URLComponents()
+        comps.scheme = "mailto"
+        comps.path = address
+        var items = [URLQueryItem(name: "subject", value: subject)]
+        if let body { items.append(URLQueryItem(name: "body", value: body)) }
+        comps.queryItems = items
+        return comps.url ?? URL(string: "mailto:\(address)")!
+    }
+
+    static var url: URL { url() }
 }
 
 // MARK: - Badge filter
