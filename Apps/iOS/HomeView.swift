@@ -12,6 +12,8 @@ struct HomeView: View {
     @State private var selectedCustoms: Set<String> = []
     @State private var confirmDeleteAll = false
     @State private var showImport = false
+    @State private var managingGenerated = false
+    @State private var selectedGenerated: Set<String> = []
 
     private let columns = [GridItem(.adaptive(minimum: 165), spacing: 14)]
 
@@ -35,6 +37,7 @@ struct HomeView: View {
                     }
                 }
                 myPuzzles
+                generatedPuzzlesSection
                 footer
             }
             .padding()
@@ -124,6 +127,14 @@ struct HomeView: View {
                         .background(Capsule().fill(Theme.surface))
                         .foregroundStyle(Theme.ink)
                 }
+            }
+            NavigationLink(value: Route.generator) {
+                Label("Generate a puzzle", systemImage: "wand.and.stars")
+                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Theme.accentSoft))
+                    .foregroundStyle(Theme.primaryDeep)
             }
         }
     }
@@ -221,6 +232,73 @@ struct HomeView: View {
                 .contextMenu {
                     NavigationLink(value: Route.editor(stored.id)) { Label("Edit", systemImage: "pencil") }
                     Button(role: .destructive) { app.deleteUserPuzzles(ids: [stored.id]) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var generatedPuzzlesSection: some View {
+        let gens = app.store.generatedPuzzles
+        if !gens.isEmpty {
+            section("Generated") {
+                HStack {
+                    Button(managingGenerated ? "Done" : "Manage") { managingGenerated.toggle(); selectedGenerated = [] }
+                        .font(.system(.footnote, design: .rounded, weight: .heavy))
+                    if managingGenerated {
+                        Button("Delete selected", role: .destructive) {
+                            app.deleteGenerated(ids: selectedGenerated)
+                            selectedGenerated = []
+                        }
+                        .disabled(selectedGenerated.isEmpty)
+                    }
+                    Spacer()
+                }
+                .font(.system(.footnote, design: .rounded, weight: .bold))
+
+                // Divided by the engine's graded difficulty, like the main library.
+                ForEach(Difficulty.ordered, id: \.self) { tier in
+                    let tierGens = gens.filter { gradeGrid($0.solution) == tier }
+                    if !tierGens.isEmpty {
+                        HStack(spacing: 8) {
+                            DifficultyChip(difficulty: tier)
+                            Text("\(tierGens.count)")
+                                .font(.system(.caption, design: .rounded, weight: .heavy))
+                                .foregroundStyle(Theme.inkSoft)
+                        }
+                        .padding(.top, 2)
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(tierGens) { generatedCard($0) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func generatedCard(_ stored: StoredPuzzle) -> some View {
+        let p = stored.asPuzzle
+        return Group {
+            if managingGenerated {
+                Button {
+                    if selectedGenerated.contains(stored.id) { selectedGenerated.remove(stored.id) } else { selectedGenerated.insert(stored.id) }
+                } label: {
+                    PuzzleCard(puzzle: p, store: app.store, selected: selectedGenerated.contains(stored.id))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(selectedGenerated.contains(stored.id) ? "Deselect \(p.title)" : "Select \(p.title)")
+            } else {
+                NavigationLink(value: Route.playGenerated(stored.id)) {
+                    PuzzleCard(puzzle: p, store: app.store)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    ShareLink(item: webShareURL(forToken: encodePuzzle(stored.solution, title: stored.title))) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive) { app.deleteGenerated(ids: [stored.id]) } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 }

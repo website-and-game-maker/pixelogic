@@ -133,7 +133,7 @@ struct PlayView: View {
             .padding(.horizontal, 20)
 
             HStack(spacing: 14) {
-                if vm.isLibrary || vm.puzzle.id.hasPrefix("u-") { // drafts have no route
+                if vm.isLibrary || vm.puzzle.id.hasPrefix("u-") || vm.puzzle.id.hasPrefix("g-") { // drafts have no route
                     Button {
                         vm.voidForWatchSolve() // voiding must not depend on gesture timing
                         app.path.append(Route.explainer(vm.puzzle.id))

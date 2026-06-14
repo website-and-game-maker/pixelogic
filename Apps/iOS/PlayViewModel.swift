@@ -53,7 +53,7 @@ final class PlayViewModel: ObservableObject {
         self.isLibrary = isLibrary
         self.store = store
         self.session = GameSession(puzzle: puzzle)
-        self.persistKey = (isLibrary || puzzle.id.hasPrefix("u-")) ? puzzle.id : nil
+        self.persistKey = (isLibrary || puzzle.id.hasPrefix("u-") || puzzle.id.hasPrefix("g-")) ? puzzle.id : nil
         if let key = persistKey, let saved = store.inProgress(for: key) {
             session.restore(marks: saved.grid, elapsedMs: saved.elapsedMs, assists: saved.assists)
         }

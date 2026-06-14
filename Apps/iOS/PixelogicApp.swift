@@ -34,9 +34,23 @@ final class AppModel: ObservableObject {
         return id
     }
 
-    /// Resolve a puzzle for routes that may point at library OR custom art.
+    @discardableResult
+    func saveGenerated(title: String, solution: [[Bool]]) -> String {
+        let id = store.saveGeneratedPuzzle(title: title, solution: solution)
+        objectWillChange.send()
+        return id
+    }
+
+    func deleteGenerated(ids: Set<String>) {
+        store.deleteGeneratedPuzzles(ids: ids)
+        objectWillChange.send()
+    }
+
+    /// Resolve a puzzle for routes that may point at library, custom, or generated art.
     func anyPuzzle(withID id: String) -> Puzzle? {
-        PixelogicKit.puzzle(withID: id) ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
+        PixelogicKit.puzzle(withID: id)
+            ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
+            ?? store.generatedPuzzles.first(where: { $0.id == id })?.asPuzzle
     }
 }
 
@@ -138,6 +152,12 @@ struct PixelogicApp: App {
         case .explainer(let id):
             if let p = app.anyPuzzle(withID: id) {
                 ExplainerView(puzzle: p)
+            }
+        case .generator:
+            GeneratorView()
+        case .playGenerated(let id):
+            if let stored = app.store.generatedPuzzles.first(where: { $0.id == id }) {
+                PlayView(puzzle: stored.asPuzzle, isLibrary: false, store: app.store)
             }
         }
     }

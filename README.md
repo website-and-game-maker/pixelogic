@@ -44,6 +44,12 @@ open Pixelogic.xcodeproj   # select the Pixelogic / PixelogicWatch schemes
 - **Quitting never loses a board.** In-progress attempts (marks, clock,
   penalties) persist per puzzle and resume exactly; the clock pauses whenever
   the app leaves the foreground.
+- **Generate your own.** The generator (Home → "Generate a puzzle") makes
+  brand-new boards that are **provably unique and solvable by pure logic** — it
+  keeps only line-solvable grids, so the core promise holds for free. Generated
+  puzzles land in a **Generated** library divided by their graded difficulty,
+  carry symmetric/patterned badges (never name-hint), can be shared by link, and
+  the good ones (Medium+ or badged) can be sent to the developer.
 - **No data leaves the device.** No ads (a dormant, documented protocol exists
   for the future — `AdReadiness.swift` — with no reserved UI space).
 

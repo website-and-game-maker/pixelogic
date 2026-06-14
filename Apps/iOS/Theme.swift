@@ -197,4 +197,6 @@ enum Route: Hashable {
     case editor(String?)         // custom id to edit, nil = new
     case about
     case explainer(String)       // watch-solve for a library puzzle id
+    case generator               // the puzzle generator screen
+    case playGenerated(String)   // a saved generated puzzle id
 }
