@@ -76,13 +76,12 @@ const SECTIONS: Section[] = [
   {
     icon: "🤖",
     title: "Built entirely with AI",
-    html: `<p>Every line of Pixelogic — the logic engine and its uniqueness prover, the
-      difficulty grader, the scoring model, the puzzle art, the test suites, this very page —
-      was designed and written by AI (Anthropic's Claude), steered by a human with opinions
-      about how a logic game should feel. The collaboration worked like a studio: the human
-      played, critiqued ("Hard is too easy", "the cat doesn't look like a cat"), and the AI
-      measured, redesigned, and shipped. Even the puzzles were audited by the engine the AI
-      wrote for it.</p>`,
+    html: `<p>Every part of Pixelogic — even the idea itself — was conceived and written by
+      Anthropic's Claude, working in Claude Code: the concept, the logic engine and its
+      uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test
+      suites, this very page. No human wrote, designed, or directed any of it; there is no
+      human author. A human manager publishes the app and reads feedback at a disposable
+      email address, but authored none of the game.</p>`,
   },
 ];
 

@@ -238,10 +238,13 @@ export function renderMenu(host: HTMLElement): void {
     ...sections.filter((s): s is HTMLElement => s !== null),
     el("footer", { class: "menu-footer" }, [
       el("p", { html: 'Every puzzle is <strong>provably solvable by logic alone</strong> — no guessing required.' }),
+      // Understated, website-style privacy link (About lives in the top toolbar,
+      // so the old footer About link here was redundant — mirrors the iOS app).
       el("button", {
-        class: "btn ghost about-link",
-        text: "ℹ About Pixelogic — scoring, difficulty & how it works",
-        on: { click: () => navigate("/about") },
+        class: "privacy-link",
+        text: "Privacy Policy",
+        attrs: { type: "button" },
+        on: { click: () => navigate("/privacy") },
       }),
     ]),
   ]);

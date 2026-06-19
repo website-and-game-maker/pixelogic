@@ -10,6 +10,7 @@ import { renderEditor } from "./views/editor";
 import { renderExplainer } from "./views/explainer";
 import { renderTutorial } from "./views/tutorial";
 import { renderAbout } from "./views/about";
+import { renderPrivacy } from "./views/privacy";
 import { renderBadgeList, isBadgeKey } from "./views/badgeList";
 import { getEditorDraft } from "./editorDraft";
 
@@ -80,6 +81,10 @@ function render(): void {
   }
   if (route === "about") {
     renderAbout(host);
+    return;
+  }
+  if (route === "privacy") {
+    renderPrivacy(host);
     return;
   }
   if (route === "badge" && arg && isBadgeKey(arg)) {

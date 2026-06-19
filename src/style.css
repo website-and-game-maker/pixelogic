@@ -1684,3 +1684,32 @@ button.cell {
 .about-link {
   margin-top: var(--s1);
 }
+.about-body a {
+  color: var(--primary-deep);
+  font-weight: 800;
+  text-decoration: underline;
+}
+.privacy-updated {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: var(--s2) 0 0;
+}
+/* Understated, website-style privacy link in the menu footer (mirrors iOS). */
+.privacy-link {
+  display: inline-block;
+  margin-top: var(--s2);
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.privacy-link:hover {
+  color: var(--primary-deep);
+}
