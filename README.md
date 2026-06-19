@@ -4,7 +4,7 @@ A calm, friendly **nonogram** (picross) logic-puzzle game. Deduce the hidden
 pixel-art picture from the run-length number clues on each row and column — using
 nothing but logic.
 
-🎮 **Play:** https://pycoder42.github.io/pixelogic/
+🎮 **Play:** https://website-and-game-maker.github.io/pixelogic/
 
 ## Features
 - A library of hand-crafted puzzles across sizes (5×5 → 15×15) and difficulties.

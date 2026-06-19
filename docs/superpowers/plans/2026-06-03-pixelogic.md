@@ -943,7 +943,7 @@ visible; reduced-motion respected.
 ## Task 20: Deploy + verify live URL
 
 - [ ] Push to `main`; watch the Actions deploy succeed.
-- [ ] Load **https://pycoder42.github.io/pixelogic/** in Chrome; confirm it loads and
+- [ ] Load **https://website-and-game-maker.github.io/pixelogic/** in Chrome; confirm it loads and
   a puzzle is playable on the live site. Report the URL.
 
 ---

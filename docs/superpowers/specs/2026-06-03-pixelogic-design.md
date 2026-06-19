@@ -176,7 +176,7 @@ src/main.ts   entry point / app wiring + view routing
 - Vite static build; `base = "/pixelogic/"`.
 - GitHub Actions (`.github/workflows/deploy.yml`) runs tests, builds, and publishes
   `dist/` to GitHub Pages on every push to `main`.
-- Live URL: **https://pycoder42.github.io/pixelogic/**
+- Live URL: **https://website-and-game-maker.github.io/pixelogic/**
 
 ## 9. Build order (high level)
 
