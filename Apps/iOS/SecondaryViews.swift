@@ -1,4 +1,4 @@
-// Settings, About, badge filter, and watch-solve screens.
+// Settings, About, badge filter, the dedicated Privacy page, and watch-solve.
 
 import SwiftUI
 import PixelogicKit
@@ -9,6 +9,7 @@ struct SettingsView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
+    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
 
     var body: some View {
         NavigationStack {
@@ -22,16 +23,27 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    Toggle("High-visibility board", isOn: $highVisibility)
+                } header: {
+                    Text("Accessibility")
+                } footer: {
+                    Text("Solid black crosses, darker grid lines and high-contrast clue numbers — easier to read in bright light or with low vision. A line whose clues turn plum has too many filled squares.")
+                }
+                Section {
                     Link(destination: SuggestionMail.url) {
                         Label("Send a suggestion", systemImage: "envelope")
                     }
                 } header: {
                     Text("Feedback")
                 } footer: {
-                    Text("Have an idea for a puzzle or a feature? Email it straight to the developer.")
+                    Text("Have an idea for a puzzle or a feature? It goes straight to the project's human manager, at a disposable email address.")
                 }
                 Section("Privacy") {
-                    Link(destination: URL(string: "https://website-and-game-maker.github.io/pixelogic/#/about")!) {
+                    // A real in-app page (not a web link), so the policy always
+                    // resolves even offline — Apple 5.1.1(i).
+                    NavigationLink {
+                        PrivacyView()
+                    } label: {
                         Label("Privacy policy", systemImage: "hand.raised")
                     }
                     Text("Pixelogic collects nothing. Your progress, scores and creations stay on this device.")
@@ -75,9 +87,11 @@ struct SettingsView: View {
 
 // MARK: - Suggestion mail
 
-/// Pre-filled mailto links to the developer. Single source of the address.
+/// Pre-filled mailto links to the project's human manager. Single source of the
+/// address. This is a deliberately disposable mailbox — the game itself is
+/// AI-authored (see About); the manager only publishes it and reads feedback.
 enum SuggestionMail {
-    static let address = "jayanthisaahir@gmail.com"
+    static let address = "pats-sire-06@icloud.com"
 
     /// A mailto: URL with an optional subject and body, both percent-encoded.
     static func url(subject: String = "Pixelogic suggestion", body: String? = nil) -> URL {
@@ -166,13 +180,15 @@ struct AboutView: View {
         Section(icon: "link", title: "How do shared puzzles travel without a server?",
                 body: "There's no backend at all. When you share a custom puzzle, the picture itself is encoded into the link — the URL is the puzzle. Your progress, scores and creations live on your device and never leave it."),
         Section(icon: "hand.raised.fill", title: "Your privacy",
-                body: "Pixelogic collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them."),
+                body: "Pixelogic collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them.",
+                linkLabel: "Read the full privacy policy",
+                linkURL: nil),
         Section(icon: "sparkles", title: "Built entirely with AI",
-                body: "Every part of Pixelogic — even the idea itself — was conceived and written by Claude, Anthropic's AI, working in Claude Code. The concept, the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it was imagined and authored by AI. No human wrote, designed, or directed any of it; there is no human author.",
+                body: "Every part of Pixelogic — even the idea itself — was conceived and written by Claude, Anthropic's AI, working in Claude Code. The concept, the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it was imagined and authored by AI. No human wrote, designed, or directed any of it; there is no human author. A human manager publishes the app and reads feedback at a disposable email address, but authored none of the game.",
                 linkLabel: "Try Claude Code for yourself",
                 linkURL: URL(string: "https://claude.ai/referral/8H3jezX92A")),
         Section(icon: "envelope", title: "Send a suggestion",
-                body: "Have an idea for a puzzle, a feature, or just a thought to share? Email it straight to the developer — every suggestion is read.",
+                body: "Have an idea for a puzzle, a feature, or just a thought to share? It reaches the project's human manager at a disposable email address — every suggestion is read.",
                 linkLabel: "Email a suggestion",
                 linkURL: SuggestionMail.url),
     ]
@@ -189,7 +205,15 @@ struct AboutView: View {
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(Theme.ink.opacity(0.9))
                             .lineSpacing(3)
-                        if let label = s.linkLabel, let url = s.linkURL {
+                        // The privacy card links to the dedicated in-app page.
+                        if s.icon == "hand.raised.fill" {
+                            NavigationLink(value: Route.privacy) {
+                                Label("Read the full privacy policy", systemImage: "doc.text")
+                                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                                    .foregroundStyle(Theme.primaryDeep)
+                            }
+                            .padding(.top, 2)
+                        } else if let label = s.linkLabel, let url = s.linkURL {
                             Link(destination: url) {
                                 Label(label, systemImage: linkIcon(for: url))
                                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
@@ -217,6 +241,70 @@ struct AboutView: View {
 
     private func linkIcon(for url: URL) -> String {
         url.scheme == "mailto" ? "paperplane.fill" : "arrow.up.forward.square"
+    }
+}
+
+// MARK: - Privacy (dedicated page)
+
+/// A real, self-contained privacy policy. Reachable from the Home footer, the
+/// Settings → Privacy row, and the About "Your privacy" card. It resolves
+/// offline and never depends on a web URL, satisfying App Review 5.1.1(i).
+struct PrivacyView: View {
+    private struct Para: Identifiable {
+        let id = UUID()
+        let icon: String
+        let title: String
+        let body: String
+    }
+
+    private let paras: [Para] = [
+        Para(icon: "checkmark.seal.fill", title: "The short version",
+             body: "Pixelogic collects nothing about you. There are no accounts, no analytics, no advertising, no trackers, and no network connections. Everything you do stays on your device."),
+        Para(icon: "externaldrive.fill", title: "What's stored, and where",
+             body: "Your solved puzzles, scores, best times, settings, and any puzzles you create or generate are saved only on this device, using the system's local storage. They are never uploaded anywhere, and deleting the app deletes all of it."),
+        Para(icon: "link", title: "Sharing a puzzle",
+             body: "When you share a puzzle, the picture is encoded directly into the link itself — nothing is sent to a server, because there is no server. Opening a shared link simply decodes the puzzle on the recipient's device."),
+        Para(icon: "figure.child", title: "Children",
+             body: "Pixelogic is suitable for all ages (rated 4+). Because it collects no data and contains no ads, accounts, or outbound links to user-generated content, it is safe for children to use."),
+        Para(icon: "envelope", title: "Contact",
+             body: "Pixelogic is AI-authored (see About). A human manager publishes it and reads feedback at a disposable email address: \(SuggestionMail.address). Questions about privacy can be sent there."),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                ForEach(paras) { p in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(p.title, systemImage: p.icon)
+                            .font(.system(.headline, design: .rounded, weight: .black))
+                            .foregroundStyle(Theme.ink)
+                        Text(p.body)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Theme.ink.opacity(0.9))
+                            .lineSpacing(3)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Theme.surface))
+                }
+
+                Link(destination: SuggestionMail.url(subject: "Pixelogic privacy question")) {
+                    Label("Email the manager", systemImage: "paperplane.fill")
+                        .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                        .foregroundStyle(Theme.primaryDeep)
+                }
+                .accessibilityHint("Opens your mail app")
+
+                Text("Last updated June 2026")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.inkSoft)
+                    .padding(.top, 2)
+            }
+            .padding()
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationTitle("Privacy Policy")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -300,6 +388,7 @@ private struct BadgeLegendRow: View {
 
 struct ExplainerView: View {
     let puzzle: Puzzle
+    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
     @State private var steps: [Deduction] = []
     @State private var grid: Grid
     @State private var stepIndex = 0
@@ -314,7 +403,7 @@ struct ExplainerView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            BoardView(puzzle: puzzle, marks: grid, clueStyle: .grey, mistakeCheck: false, interactive: false)
+            BoardView(puzzle: puzzle, marks: grid, clueStyle: .grey, mistakeCheck: false, highVisibility: highVisibility, interactive: false)
                 .padding(.horizontal)
             Text(stepIndex > 0 && stepIndex <= steps.count ? steps[stepIndex - 1].caption : "Press play to watch the logical solution unfold, one undeniable step at a time.")
                 .font(.system(.subheadline, design: .rounded, weight: .bold))

@@ -68,9 +68,9 @@ struct PixelogicApp: App {
             }
             .environmentObject(app)
             .tint(Theme.primaryDeep)
-            // The hand-tuned baby-blue palette is the brand in both modes;
-            // forcing light keeps system surfaces (Form, sheets) coherent.
-            .preferredColorScheme(.light)
+            // The hand-tuned baby-blue palette now ships LIGHT and DARK
+            // adaptive variants (see Theme.swift), so the app follows the
+            // system appearance instead of forcing one.
             .sheet(isPresented: $app.showSettings) {
                 SettingsView().environmentObject(app)
             }
@@ -149,6 +149,8 @@ struct PixelogicApp: App {
             EditorView(editID: id, store: app.store)
         case .about:
             AboutView()
+        case .privacy:
+            PrivacyView()
         case .explainer(let id):
             if let p = app.anyPuzzle(withID: id) {
                 ExplainerView(puzzle: p)

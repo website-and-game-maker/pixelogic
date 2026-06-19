@@ -10,6 +10,7 @@ struct PlayView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
 
     init(puzzle: Puzzle, isLibrary: Bool, store: PlayerStore) {
         _vm = StateObject(wrappedValue: PlayViewModel(puzzle: puzzle, isLibrary: isLibrary, store: store))
@@ -24,6 +25,7 @@ struct PlayView: View {
                     marks: vm.marks,
                     clueStyle: vm.settings.clueStyle,
                     mistakeCheck: vm.settings.mistakeCheck,
+                    highVisibility: highVisibility,
                     onTouch: { r, c, drag in vm.touch(r, c, isDrag: drag) }
                 )
                 .padding(.horizontal, 12)
@@ -99,10 +101,13 @@ struct PlayView: View {
             let next = library[(idx + offset + library.count) % library.count]
             app.replaceTop(with: .play(next.id))
         } label: {
+            // 44×44 minimum hit target (Apple HIG); the visible circle now fills
+            // that target instead of relying on a 10pt pad around a 15pt glyph.
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .heavy))
-                .padding(10)
+                .font(.system(size: 16, weight: .heavy))
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(Theme.surface))
+                .contentShape(Circle())
         }
         .accessibilityLabel(label)
     }
@@ -193,7 +198,7 @@ struct PlayView: View {
         NavigationLink(value: Route.badge(BadgeKey.symmetric)) {
             Text("\(badge.label) — its halves mirror each other, so each deduction does double duty.")
                 .font(.system(.footnote, design: .rounded, weight: .bold))
-                .foregroundStyle(Color(hex: 0x0B7E89))
+                .foregroundStyle(Theme.symmetryInk)
                 .multilineTextAlignment(.center)
                 .padding(12)
                 .frame(maxWidth: .infinity)

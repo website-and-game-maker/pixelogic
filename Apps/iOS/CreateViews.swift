@@ -8,6 +8,7 @@ import PixelogicKit
 struct TutorialView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
 
     private let puzzle = PixelogicKit.puzzle(withID: "plus")!
     @State private var session: GameSession
@@ -32,7 +33,7 @@ struct TutorialView: View {
              mode: .cross, goal: [(0, 0)], want: .empty),
         Step(text: "Back to painting. Column 3's clue is also 5 — fill the whole column to finish the picture.",
              mode: .paint, goal: [(0, 2), (1, 2), (2, 2), (3, 2), (4, 2)], want: .filled),
-        Step(text: "🎉 You solved it! That's the whole game: read the clues, fill what's forced, cross what's empty. Every puzzle is solvable by logic alone.",
+        Step(text: "🎉 You solved it! That's the whole game: read the clues, fill what's forced, cross what's empty. A clue turns grey once its line is done — and plum if you've filled too many squares in that line. Need more contrast? Turn on High-visibility board in Settings for solid black crosses.",
              mode: nil, goal: nil, want: .filled),
     ]
 
@@ -56,7 +57,7 @@ struct TutorialView: View {
             }
             .padding(.horizontal)
 
-            BoardView(puzzle: puzzle, marks: marks, clueStyle: .grey, mistakeCheck: false) { r, c, drag in
+            BoardView(puzzle: puzzle, marks: marks, clueStyle: .grey, mistakeCheck: false, highVisibility: highVisibility) { r, c, drag in
                 guard steps[stepIndex].goal != nil || drag else { return }
                 session.mode = mode
                 if drag {
@@ -292,12 +293,12 @@ struct EditorView: View {
         case .unique(let d):
             Text("✓ Unique — solvable by logic (\(d.displayName)).")
                 .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                .foregroundStyle(Color(hex: 0x0C8F6C))
+                .foregroundStyle(Color(lightHex: 0x0C8F6C, darkHex: 0x34C89A))
         case .notUnique(let count):
             VStack(spacing: 6) {
                 Text("⚠ Not unique — the clues match \(count)+ different pictures.")
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                    .foregroundStyle(Color(hex: 0xB5651D))
+                    .foregroundStyle(Color(lightHex: 0xB5651D, darkHex: 0xE0A45A))
                 Text(ambiguous != nil
                      ? "The highlighted cell could be filled or empty under the same clues. Add or remove a filled cell near there — usually extending a run or breaking a symmetry — to pin the picture down. Save unlocks once there's exactly one solution."
                      : "Adjust the picture so the clues allow only one solution — Save unlocks then.")

@@ -75,10 +75,15 @@ struct HomeView: View {
                 .font(.system(.subheadline, design: .rounded, weight: .bold))
                 .foregroundStyle(Theme.inkSoft)
 
-            // Pixelogic Score laurel (below the tagline, above the actions)
+            // Pixelogic Score laurel (below the tagline, above the actions).
+            // The laurel grows and gilds as the score climbs: a humble green
+            // sprig for beginners, a fuller green branch, then bronze, silver,
+            // and finally a full golden wreath for pros.
             let score = app.store.pixelogicScore
+            let laurel = laurelTier(for: score)
             HStack(spacing: 12) {
-                Text("🌿").font(.title)
+                Image(laurel.name).resizable().scaledToFit().frame(height: laurel.height)
+                    .accessibilityHidden(true)
                 VStack(spacing: 0) {
                     Text("\(score)")
                         .font(.system(size: 30, weight: .black, design: .rounded))
@@ -88,7 +93,8 @@ struct HomeView: View {
                         .font(.system(size: 11, weight: .black, design: .rounded))
                         .foregroundStyle(Theme.primaryDeep)
                 }
-                Text("🌿").font(.title).scaleEffect(x: -1)
+                Image(laurel.name).resizable().scaledToFit().frame(height: laurel.height).scaleEffect(x: -1)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 8)
@@ -149,6 +155,19 @@ struct HomeView: View {
         let solved = library.filter { app.store.isCompleted($0.id) }.count
         let reset = app.store.wasProgressReset ? " (progress was reset at least once)" : ""
         return "My Pixelogic Score is \(score)/1600 — \(scoreTitle(score)) (\(solved)/\(library.count) solved)\(reset). ▦ Can you beat it?"
+    }
+
+    /// The laurel that flanks the score, by tier. It grows fuller and gilds as
+    /// the Pixelogic Score climbs; the first upgrade arrives after only a little
+    /// play. Thresholds are deliberately easy to tune.
+    private func laurelTier(for score: Int) -> (name: String, height: CGFloat) {
+        switch score {
+        case ..<30:  return ("Laurel", 30)        // Beginner — the humble green sprig
+        case ..<120: return ("LaurelGreen", 42)   // first upgrade — arrives soon
+        case ..<350: return ("LaurelBronze", 50)
+        case ..<800: return ("LaurelSilver", 58)
+        default:     return ("LaurelGold", 68)    // Pro — full golden wreath
+        }
     }
 
     /// Adaptive Surprise me: a random unsolved puzzle from the frontier tier.
@@ -230,6 +249,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button { app.path.append(Route.playCustom(stored.id)) } label: { Label("Play", systemImage: "play.fill") }
                     NavigationLink(value: Route.editor(stored.id)) { Label("Edit", systemImage: "pencil") }
                     Button(role: .destructive) { app.deleteUserPuzzles(ids: [stored.id]) } label: {
                         Label("Delete", systemImage: "trash")
@@ -298,6 +318,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button { app.path.append(Route.playGenerated(stored.id)) } label: { Label("Play", systemImage: "play.fill") }
                     ShareLink(item: webShareURL(forToken: encodePuzzle(stored.solution, title: stored.title))) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
@@ -310,14 +331,18 @@ struct HomeView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 14) {
             Text("Every puzzle is provably solvable by logic alone — no guessing required.")
                 .font(.system(.footnote, design: .rounded, weight: .bold))
                 .foregroundStyle(Theme.inkSoft)
-            NavigationLink(value: Route.about) {
-                Text("ℹ About Pixelogic — scoring, difficulty & how it works")
-                    .font(.system(.footnote, design: .rounded, weight: .heavy))
-                    .foregroundStyle(Theme.primaryDeep)
+            // An understated, website-style privacy link at the very bottom —
+            // plain system text, kept deliberately out of the way. (The old
+            // "About" link here was redundant with the toolbar info button.)
+            NavigationLink(value: Route.privacy) {
+                Text("Privacy Policy")
+                    .font(.footnote)
+                    .underline()
+                    .foregroundStyle(Theme.inkSoft)
             }
         }
         .multilineTextAlignment(.center)

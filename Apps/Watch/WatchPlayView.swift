@@ -61,7 +61,7 @@ struct WatchPlayView: View {
                 VStack(spacing: 6) {
                     Label("Solved \(puzzle.title)!", systemImage: "checkmark.seal.fill")
                         .font(.footnote.bold())
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(WatchPalette.cellFill)
                     Text("Time \(timeString(finalMs))")
                         .font(.system(.caption2, design: .rounded, weight: .semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -72,7 +72,7 @@ struct WatchPlayView: View {
                             .font(.footnote.bold())
                             .frame(maxWidth: .infinity)
                     }
-                    .tint(.teal)
+                    .tint(WatchPalette.cellFill)
                 }
             } else {
                 // One giant mode toggle — the only control on the wrist.
@@ -84,7 +84,7 @@ struct WatchPlayView: View {
                         .font(.footnote.bold())
                         .frame(maxWidth: .infinity)
                 }
-                .tint(crossMode ? .gray : .teal)
+                .tint(crossMode ? .gray : WatchPalette.cellFill)
             }
         }
         .navigationTitle(puzzle.title)
@@ -201,11 +201,11 @@ struct WatchBoardView: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(mark == .filled ? Color.teal : Color.white.opacity(0.14))
+                    .fill(mark == .filled ? WatchPalette.cellFill : WatchPalette.cellEmpty)
                 if mark == .empty {
                     Image(systemName: "xmark")
                         .font(.system(size: size * 0.4, weight: .bold))
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(WatchPalette.cellCross)
                 }
             }
             .frame(width: size - 1.5, height: size - 1.5)

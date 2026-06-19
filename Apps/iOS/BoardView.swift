@@ -1,6 +1,13 @@
 // The nonogram board: clue rails + cell grid, rendered with Canvas for crisp
 // performance up to 15×15, with tap & line-locked drag painting (the same
 // input model as the web app).
+//
+// Two visibility aids live here:
+//  • `highVisibility` (a Settings toggle): solid-black crosses, darker grid
+//    lines and black unmet clues — a low-vision / bright-sunlight mode.
+//  • Over-fill warning: when a row or column holds MORE filled cells than its
+//    clue allows, that line's clue numbers turn plum (Theme.overfill) — a calm
+//    but unmissable "too many here" signal, distinct from the red mistake cue.
 
 import SwiftUI
 import PixelogicKit
@@ -10,6 +17,7 @@ struct BoardView: View {
     let marks: Grid
     let clueStyle: ClueStyle
     let mistakeCheck: Bool
+    var highVisibility = false
     var interactive = true
     /// (row, col, isDrag) — the view model decides paint vs cross.
     var onTouch: ((Int, Int, Bool) -> Void)?
@@ -58,10 +66,10 @@ struct BoardView: View {
         return Layout(cell: cell, originX: cluesW * cell, originY: cluesH * cell)
     }
 
-    // MARK: - Drawing
+    // MARK: - Line state
 
     private func clueColor(done: Bool) -> Color {
-        guard done else { return Theme.ink }
+        guard done else { return highVisibility ? .black : Theme.ink }
         switch clueStyle {
         case .grey, .strike: return Theme.inkSoft
         case .hide: return .clear
@@ -77,15 +85,31 @@ struct BoardView: View {
         clueStyle != .none && cluesForLine(marks.map { $0[c] == .filled }) == puzzle.colClues[c]
     }
 
+    /// More cells filled in this line than its clues can ever account for —
+    /// always an error, so worth flagging regardless of the clue-style setting.
+    private func rowOver(_ r: Int) -> Bool {
+        let filled = marks[r].filter { $0 == .filled }.count
+        return filled > puzzle.rowClues[r].reduce(0, +)
+    }
+
+    private func colOver(_ c: Int) -> Bool {
+        let filled = marks.reduce(0) { $0 + ($1[c] == .filled ? 1 : 0) }
+        return filled > puzzle.colClues[c].reduce(0, +)
+    }
+
+    // MARK: - Drawing
+
     private func drawColClues(_ ctx: GraphicsContext, _ l: Layout) {
         for c in 0..<puzzle.width {
             let clue = puzzle.colClues[c]
+            let over = colOver(c)
             let done = colDone(c)
+            let color = over ? Theme.overfill : clueColor(done: done)
             let nums = clue.isEmpty ? [0] : clue
             for (i, n) in nums.enumerated() {
                 let y = l.originY - CGFloat(nums.count - i) * l.cell * 0.58 + l.cell * 0.06
                 let x = l.originX + CGFloat(c) * l.cell + l.cell / 2
-                draw(ctx, "\(n)", at: CGPoint(x: x, y: y + l.cell * 0.26), size: l.cell * 0.42, color: clueColor(done: done), strike: done && clueStyle == .strike)
+                draw(ctx, "\(n)", at: CGPoint(x: x, y: y + l.cell * 0.26), size: l.cell * 0.42, color: color, strike: done && !over && clueStyle == .strike)
             }
         }
     }
@@ -93,12 +117,14 @@ struct BoardView: View {
     private func drawRowClues(_ ctx: GraphicsContext, _ l: Layout) {
         for r in 0..<puzzle.height {
             let clue = puzzle.rowClues[r]
+            let over = rowOver(r)
             let done = rowDone(r)
+            let color = over ? Theme.overfill : clueColor(done: done)
             let nums = clue.isEmpty ? [0] : clue
             for (i, n) in nums.enumerated() {
                 let x = l.originX - CGFloat(nums.count - i) * l.cell * 0.58 + l.cell * 0.12
                 let y = l.originY + CGFloat(r) * l.cell + l.cell / 2
-                draw(ctx, "\(n)", at: CGPoint(x: x + l.cell * 0.2, y: y), size: l.cell * 0.42, color: clueColor(done: done), strike: done && clueStyle == .strike)
+                draw(ctx, "\(n)", at: CGPoint(x: x + l.cell * 0.2, y: y), size: l.cell * 0.42, color: color, strike: done && !over && clueStyle == .strike)
             }
         }
     }
@@ -114,6 +140,8 @@ struct BoardView: View {
     private func drawCells(_ ctx: GraphicsContext, _ l: Layout) {
         let w = puzzle.width
         let h = puzzle.height
+        let crossColor: Color = highVisibility ? .black : Theme.cross
+        let crossWidth: CGFloat = highVisibility ? 3 : 2
         // Surface + outer border
         let boardRect = CGRect(x: l.originX, y: l.originY, width: CGFloat(w) * l.cell, height: CGFloat(h) * l.cell)
         ctx.fill(Path(roundedRect: boardRect, cornerRadius: 4), with: .color(Theme.surface))
@@ -140,21 +168,23 @@ struct BoardView: View {
                     path.addLine(to: CGPoint(x: inset.maxX, y: inset.maxY))
                     path.move(to: CGPoint(x: inset.maxX, y: inset.minY))
                     path.addLine(to: CGPoint(x: inset.minX, y: inset.maxY))
-                    ctx.stroke(path, with: .color(Theme.cross), lineWidth: 2)
+                    ctx.stroke(path, with: .color(crossColor), lineWidth: crossWidth)
                 case .unknown:
                     break
                 }
             }
         }
 
-        // Grid lines (major every 5)
+        // Grid lines (major every 5). High-visibility darkens both weights.
+        let minorColor: Color = highVisibility ? Theme.lineMajor : Theme.line
+        let majorColor: Color = highVisibility ? Theme.ink.opacity(0.55) : Theme.lineMajor
         for c in 0...w {
             let major = c % 5 == 0
             let x = l.originX + CGFloat(c) * l.cell
             var p = Path()
             p.move(to: CGPoint(x: x, y: l.originY))
             p.addLine(to: CGPoint(x: x, y: l.originY + CGFloat(h) * l.cell))
-            ctx.stroke(p, with: .color(major ? Theme.lineMajor : Theme.line), lineWidth: major ? 1.6 : 0.8)
+            ctx.stroke(p, with: .color(major ? majorColor : minorColor), lineWidth: major ? 1.6 : 0.8)
         }
         for r in 0...h {
             let major = r % 5 == 0
@@ -162,7 +192,7 @@ struct BoardView: View {
             var p = Path()
             p.move(to: CGPoint(x: l.originX, y: y))
             p.addLine(to: CGPoint(x: l.originX + CGFloat(w) * l.cell, y: y))
-            ctx.stroke(p, with: .color(major ? Theme.lineMajor : Theme.line), lineWidth: major ? 1.6 : 0.8)
+            ctx.stroke(p, with: .color(major ? majorColor : minorColor), lineWidth: major ? 1.6 : 0.8)
         }
     }
 
