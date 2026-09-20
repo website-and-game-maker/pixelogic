@@ -1,29 +1,37 @@
-# Pixelogic
+# Clueweave
 
-A calm, friendly **nonogram** (picross) logic-puzzle game. Deduce the hidden
-pixel-art picture from the run-length number clues on each row and column — using
-nothing but logic.
+A nonogram (picross) logic-puzzle game — deduce a hidden picture from the
+run-length number clues on each row and column. Free, offline, no ads, no
+accounts, nothing collected.
 
-🎮 **Play:** https://pycoder42.github.io/pixelogic/
+**Play it:** https://website-and-game-maker.github.io/clueweave/
 
-## Features
-- A library of hand-crafted puzzles across sizes (5×5 → 15×15) and difficulties.
-- A rigorous logic engine: every puzzle is **proven uniquely solvable by pure logic**.
-- A **hint** that reveals the next forced cell *and explains the deduction*.
-- A **"watch it solve"** mode that walks through the logical solution step by step.
-- A **custom editor**: draw your own picture, auto-generate clues, prove uniqueness.
-- Undo/redo, timer, mistake-check, autosave — and a satisfying reveal when you win.
+Every puzzle that ships is *proved* to have exactly one solution and to be
+solvable by pure logic — no guessing is ever required.
 
-## Tech
-TypeScript + Vite, tested with Vitest, deployed to GitHub Pages via GitHub Actions.
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `web/` | The web app — TypeScript + Vite. Published to GitHub Pages. |
+| `apple/` | The native port — `ClueweaveKit` engine plus iOS/iPad and watchOS apps. |
+
+Both halves implement the same engine and must agree exactly on share tokens,
+scoring, and difficulty. See `CLAUDE.md` for the rules that keep them in sync.
+
+## Running it
 
 ```bash
+cd web
 npm install
-npm run dev      # http://localhost:5173/pixelogic/
+npm run dev      # http://localhost:5173/clueweave/
 npm test
 npm run build
 ```
 
-## How it works
-See [`docs/superpowers/specs/`](docs/superpowers/specs/) for the design and
-[`Claude.md`](Claude.md) for the project map.
+For the Apple side see [`apple/README.md`](apple/README.md).
+
+## Authorship
+
+Concept, engine, art, tests and docs were all created by Claude (Anthropic's AI)
+in Claude Code. There is no human author.

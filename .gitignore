@@ -1,10 +1,11 @@
-node_modules/
-dist/
-*.local
 .DS_Store
-.vite/
-coverage/
 *.log
-.env
-.env.*
-!.env.example
+
+# Claude Code local state (worktrees, session settings)
+.claude/
+
+# Nested checkouts that live beside the repo, not in it.
+# .worktrees/ holds working clones; pixelogic-apple/ is the pre-merge Apple
+# repo, whose content and history now live under apple/.
+.worktrees/
+pixelogic-apple/

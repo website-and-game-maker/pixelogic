@@ -1,0 +1,164 @@
+# XcodeGen project definition. Generate the Xcode project with:
+#   brew install xcodegen   (once)
+#   xcodegen generate
+# then open Clueweave.xcodeproj. Requires full Xcode for iOS/watchOS builds.
+
+name: Clueweave
+options:
+  bundleIdPrefix: com.clueweave
+  deploymentTarget:
+    iOS: "16.0"
+    watchOS: "9.0"
+  createIntermediateGroups: true
+
+packages:
+  ClueweaveKit:
+    path: ClueweaveKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""        # set your team in Xcode → Signing & Capabilities
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Clueweave:
+    type: application
+    platform: iOS
+    supportedDestinations: [iOS]    # iPhone + iPad (universal)
+    sources:
+      - Apps/iOS
+      - Apps/Shared               # ClueweaveActivityAttributes — shared with the widget
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    entitlements:
+      path: Support/Clueweave.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.clueweave.app]
+    dependencies:
+      - package: ClueweaveKit
+      - target: ClueweaveWatch     # embedded → one App Store record for both
+      - target: ClueweaveWidgets   # Home Screen / Lock Screen widgets + Live Activity
+    info:
+      path: Support/Info-iOS.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        UILaunchScreen: {}            # system launch screen, brand bg applied in-app
+        NSSupportsLiveActivities: true
+        # No frequent push updates: the app updates its own activity in-process.
+        NSSupportsLiveActivitiesFrequentUpdates: false
+        UIApplicationSceneManifest:   # single window; the save store is one blob
+          UIApplicationSupportsMultipleScenes: false
+        CFBundleURLTypes:             # clueweave://p/<token> imports a shared puzzle
+          - CFBundleURLName: com.clueweave.app
+            CFBundleURLSchemes: [clueweave]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false   # no custom crypto → no export docs
+        LSApplicationCategoryType: public.app-category.puzzle-games
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # Widgets, Lock Screen complications and the Live Activity for iPhone/iPad.
+  #
+  # Deployment target is deliberately ABOVE the app's: AppIntentConfiguration,
+  # containerBackground and supplementalActivityFamily (the Apple Watch mirror)
+  # all want a modern floor, and paying for them with availability branches in
+  # every view is a worse trade than "older phones keep the app, minus widgets".
+  ClueweaveWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget:
+      iOS: "18.0"
+    sources:
+      - Apps/Widgets
+      - Apps/WidgetUI              # shared with the watch complications
+      - Apps/Shared                # the Live Activity's attributes
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    entitlements:
+      path: Support/ClueweaveWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.clueweave.app]
+    dependencies:
+      - package: ClueweaveKit
+    info:
+      path: Support/Info-Widgets.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+
+  ClueweaveWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - Apps/Watch
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    entitlements:
+      path: Support/ClueweaveWatch.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.clueweave.app]
+    dependencies:
+      - package: ClueweaveKit
+      - target: ClueweaveWatchComplications
+    info:
+      path: Support/Info-Watch.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        WKApplication: true             # single-target watch app
+        WKCompanionAppBundleIdentifier: com.clueweave.app
+        WKRunsIndependentlyOfCompanionApp: true   # installs & runs without the phone
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # Watch face complications. watchOS 11 for the same reasons as the iOS widget
+  # extension, plus it is the floor for mirrored Live Activities.
+  ClueweaveWatchComplications:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget:
+      watchOS: "11.0"
+    sources:
+      - Apps/WatchComplications
+      - Apps/WidgetUI              # shared with the iOS widgets
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    entitlements:
+      path: Support/ClueweaveWatchComplications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.clueweave.app]
+    dependencies:
+      - package: ClueweaveKit
+    info:
+      path: Support/Info-WatchComplications.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app.watchkitapp.complications
+        SKIP_INSTALL: YES

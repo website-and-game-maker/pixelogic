@@ -1,0 +1,762 @@
+import { UNKNOWN, FILLED, EMPTY, type Puzzle, type Clue } from "../../engine/types";
+import { puzzleScore } from "../../engine/scoring";
+import { puzzleBadges } from "../../engine/badges";
+import { cluesForLine } from "../../engine/clues";
+import { GameState } from "../gameState";
+import { createBoard, playWinReveal, type CellView, type BoardConfig } from "../render";
+import { attachInput } from "../input";
+import { nextHint } from "../hints";
+import { el, mount } from "../dom";
+import { formatTime, difficultyMeta, sizeLabel } from "../format";
+import {
+  loadSave,
+  getSettings,
+  setSettings,
+  setProgression,
+  patchProgression,
+  recordProgress,
+  clearProgress,
+  markCompleted,
+  recordBestTime,
+  recordPuzzleScore,
+} from "../persistence";
+import {
+  applySignal,
+  classifySignal,
+  curriculumNeighbour,
+  curriculumOrder,
+  shouldPromptSmartNext,
+  smartNextTarget,
+  type Recommendation,
+} from "../../engine/progression";
+import { ScoreState } from "../scoreState";
+import { openModal } from "../modal";
+import { openSettings, openRules } from "../settings";
+import { puzzleLink, shareResult } from "../share";
+import { navigate } from "../router";
+import { LIBRARY } from "../../engine/puzzles";
+
+type Cleanup = () => void;
+
+export interface PlayOptions {
+  fromLibrary: boolean;
+  /** Set when test-playing an editor draft. Back/overlay return here (not Menu). */
+  testReturn?: string;
+}
+
+export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions): Cleanup {
+  const { fromLibrary, testReturn } = opts;
+  const isTest = !!testReturn;
+  const isCustomSaved = !fromLibrary && puzzle.id.startsWith("u-");
+  const scored = fromLibrary; // only built-in puzzles feed the Clueweave Score
+  const badges = puzzleBadges(puzzle);
+  const symmetricBadge = badges.find((b) => b.key === "symmetric");
+  const area = puzzle.width * puzzle.height;
+
+  const save = loadSave();
+  const saved = save.progress[puzzle.id];
+  const state = new GameState(
+    puzzle,
+    fromLibrary && saved ? saved.marks : undefined,
+    fromLibrary && saved ? saved.elapsedMs : 0,
+  );
+  const score = new ScoreState(puzzle.id, puzzle.difficulty, scored);
+  let settings = save.settings;
+  let mistakeCheck = settings.mistakeCheck;
+  let solved = false;
+  let filledOut = false;
+  let saveTimer: number | null = null;
+  let pendingCheck: "square" | "line" | null = null;
+
+  const cellView = (r: number, c: number): CellView =>
+    state.marks[r][c] === FILLED ? "filled" : state.marks[r][c] === EMPTY ? "cross" : "empty";
+
+  const boardConfig: BoardConfig = {
+    width: puzzle.width,
+    height: puzzle.height,
+    rowClues: puzzle.rowClues,
+    colClues: puzzle.colClues,
+    getCell: cellView,
+    isMistake: (r, c) => mistakeCheck && state.marks[r][c] === FILLED && !puzzle.solution[r][c],
+    satisfiedStyle: settings.clueStyle,
+    interactive: true,
+    gridLabel: `${puzzle.title} — ${puzzle.height} by ${puzzle.width} nonogram grid`,
+  };
+  const board = createBoard(boardConfig);
+  const detachInput = attachInput(board, state);
+
+  // ---- header ----
+  const meta = difficultyMeta(puzzle.difficulty);
+  const timerEl = el("span", { class: "timer", text: formatTime(state.elapsedMs()) });
+  const timerWrap = el("div", { class: "timer-wrap" }, [timerEl]);
+  const rulesBtn = el("button", {
+    class: "icon-btn",
+    text: "❔",
+    attrs: { type: "button", "aria-label": "How to play", title: "How to play" },
+    on: { click: () => openRules() },
+  });
+  const settingsBtn = el("button", {
+    class: "icon-btn",
+    text: "⚙",
+    attrs: { type: "button", "aria-label": "Game settings", title: "Settings" },
+    on: { click: () => openSettings("game", applySettings) },
+  });
+  const backBtn = el("button", {
+    class: "btn ghost back-btn",
+    text: isTest ? "‹ Editor" : "‹ Menu",
+    on: { click: goBack },
+  });
+
+  /** A clickable badge chip linking to that badge's filter page. */
+  const badgeChip = (b: { key: string; label: string }): HTMLElement =>
+    el("button", {
+      class: `chip chip-badge chip-${b.key}`,
+      text: b.label,
+      attrs: { type: "button", "aria-label": `See all ${b.key} puzzles` },
+      on: { click: () => navigate(`/badge/${b.key}`) },
+    });
+
+  // ---- navigation (docs/progression-model.md §6) ----
+  // Two deliberately different affordances:
+  //   • the bottom strip walks curriculum order — predictable, never wrapping,
+  //     greyed out at the ends, and it never consults or mutates the model;
+  //   • the sheened → at the top right asks the progression model what suits you.
+  const curriculum = curriculumOrder(LIBRARY);
+  const curIndex = fromLibrary ? curriculum.findIndex((p) => p.id === puzzle.id) : -1;
+  const inCurriculum = curIndex >= 0;
+  const prevId = inCurriculum ? curriculumNeighbour(LIBRARY, puzzle.id, -1) : null;
+  const nextId = inCurriculum ? curriculumNeighbour(LIBRARY, puzzle.id, 1) : null;
+
+  /** A bottom-strip arrow. Disabled (not hidden) at the ends so the wall is visible. */
+  const navBtn = (label: string, targetId: string | null, hint: string): HTMLElement => {
+    const btn = el("button", {
+      class: "nav-btn",
+      text: label,
+      attrs: { type: "button", "aria-label": hint, title: targetId ? hint : `${hint} — none` },
+      on: { click: () => targetId && navigate(`/play/${encodeURIComponent(targetId)}`) },
+    });
+    if (!targetId) btn.setAttribute("disabled", "");
+    return btn;
+  };
+
+  const puzzleNav = inCurriculum
+    ? el("nav", { class: "puzzle-nav", attrs: { "aria-label": "Puzzle navigation" } }, [
+        navBtn("← Previous", prevId, "Previous puzzle"),
+        el("span", {
+          class: "nav-position",
+          text: `${curIndex + 1} of ${curriculum.length} · ${meta.label}`,
+        }),
+        navBtn("Next →", nextId, "Next puzzle"),
+      ])
+    : null;
+
+  // The smart-next arrow. Sheened while it is actually being smart.
+  const smartNextBtn = el("button", {
+    class: "icon-btn smart-next",
+    text: "→",
+    attrs: { type: "button" },
+    on: { click: onSmartNext },
+  });
+  function refreshSmartNext(): void {
+    const on = settings.smartNext;
+    smartNextBtn.classList.toggle("sheen", on);
+    const label = on ? "Recommended next puzzle" : "Next puzzle";
+    smartNextBtn.setAttribute("aria-label", label);
+    smartNextBtn.setAttribute("title", on ? "Recommended next puzzle — picked for how you're doing" : label);
+  }
+
+  const header = el("header", { class: "play-header" }, [
+    backBtn,
+    el("div", { class: "play-title" }, [
+      el("h1", { text: puzzle.title }),
+      el("div", { class: "play-sub" }, [
+        el("span", { class: `chip ${meta.className}`, text: meta.label }),
+        el("span", { class: "chip muted", text: sizeLabel(puzzle.width, puzzle.height) }),
+        ...badges.map(badgeChip),
+        isTest ? el("span", { class: "chip muted", text: "Test play" }) : null,
+      ]),
+    ]),
+    el("div", { class: "play-tools" }, [
+      rulesBtn,
+      settingsBtn,
+      timerWrap,
+      // Rightmost and larger than its neighbours — the one-tap "what next?".
+      inCurriculum ? smartNextBtn : null,
+    ]),
+  ]);
+
+  const banner = el("div", { class: "banner", attrs: { role: "status", "aria-live": "polite" } });
+
+  // ---- mode toggle (Paint / Cross — renamed to avoid "fill out the answer") ----
+  const fillBtn = el("button", { class: "seg active", text: "🖌 Paint", attrs: { type: "button" } });
+  const crossBtn = el("button", { class: "seg", text: "✕ Cross", attrs: { type: "button" } });
+  fillBtn.addEventListener("click", () => state.setMode("fill"));
+  crossBtn.addEventListener("click", () => state.setMode("cross"));
+  const modeToggle = el("div", { class: "segmented", attrs: { role: "group", "aria-label": "Mark mode" } }, [
+    fillBtn,
+    crossBtn,
+  ]);
+
+  const undoBtn = el("button", { class: "btn", text: "↶ Undo", on: { click: () => state.undo() } });
+  const redoBtn = el("button", { class: "btn", text: "↷ Redo", on: { click: () => state.redo() } });
+
+  // ---- assists ----
+  const hintBtn = el("button", { class: "btn", text: "💡 Hint −20", on: { click: useHint } });
+  const checkSquareBtn = el("button", { class: "btn", text: "🔍 Square −5", on: { click: () => armCheck("square") } });
+  const checkLineBtn = el("button", { class: "btn", text: "🔍 Line −15", on: { click: () => armCheck("line") } });
+  const checkBoardBtn = el("button", { class: "btn", text: "🔍 Board −40", on: { click: checkBoard } });
+  const fillOutBtn = el("button", { class: "btn ghost", text: "Fill out", on: { click: fillOut } });
+  const explainBtn = el("button", { class: "btn", text: "🧠 Watch solve", on: { click: watchSolve } });
+  const restartBtn = el("button", { class: "btn ghost", text: "↺ Restart", on: { click: restart } });
+
+  const assistMeter = el("div", { class: "assist-meter", attrs: { "aria-live": "polite" } });
+
+  const controls = el("div", { class: "controls" }, [
+    modeToggle,
+    el("div", { class: "control-group" }, [undoBtn, redoBtn]),
+    el("div", { class: "control-group" }, [hintBtn, checkSquareBtn, checkLineBtn, checkBoardBtn]),
+    el("div", { class: "control-group" }, [explainBtn, fillOutBtn, restartBtn]),
+    assistMeter,
+  ]);
+
+  // ---- post-solve bar (shown after closing the win popup) ----
+  const postSolveBar = el("div", { class: "controls post-solve hidden" });
+
+  // ---- symmetry footer (#11) — names the mirror direction, links to the badge page ----
+  const symmetryFooter = symmetricBadge
+    ? el("div", { class: "symmetry-strip", attrs: { role: "note" } }, [
+        el("span", {
+          text: `${symmetricBadge.label} — its halves mirror each other, so each deduction does double duty. `,
+        }),
+        el("button", {
+          class: "strip-link",
+          text: "See all symmetric puzzles ›",
+          attrs: { type: "button" },
+          on: { click: () => navigate("/badge/symmetric") },
+        }),
+      ])
+    : null;
+
+  // ---- win overlay ----
+  const winEmoji = el("div", { class: "win-emoji", text: "🎉" });
+  const winHeading = el("h2", { text: "Solved!" });
+  const winTime = el("p", { class: "win-time" });
+  const winScoreEl = el("p", { class: "win-score" });
+  const winNote = el("p", { class: "win-note" });
+  const winActions = el("div", { class: "win-actions" });
+  const winClose = el("button", {
+    class: "modal-close",
+    text: "✕",
+    attrs: { type: "button", "aria-label": "Close and admire the picture" },
+    on: { click: closeWinOverlay },
+  });
+  const winCard = el("div", { class: "win-card" }, [winClose, winEmoji, winHeading, winScoreEl, winTime, winNote, winActions]);
+  const winOverlay = el(
+    "div",
+    { class: "win-overlay hidden", attrs: { role: "dialog", "aria-modal": "true", "aria-label": "Puzzle solved" } },
+    [winCard],
+  );
+
+  const layout = el("div", { class: "view play" }, [
+    header,
+    el("div", { class: "board-wrap" }, [board.element]),
+    banner,
+    controls,
+    postSolveBar,
+    symmetryFooter,
+    // Level-to-level browsing lives at the very bottom, away from the solving tools.
+    puzzleNav,
+    winOverlay,
+  ]);
+  mount(host, layout);
+
+  // ====================================================================
+  function goBack(): void {
+    navigate(isTest ? testReturn! : "/");
+  }
+
+  function applySettings(): void {
+    settings = getSettings();
+    mistakeCheck = settings.mistakeCheck;
+    boardConfig.satisfiedStyle = settings.clueStyle;
+    timerWrap.classList.toggle("hidden", !settings.showTimer);
+    refreshSmartNext();
+    board.refresh();
+  }
+
+  function refreshControls(): void {
+    undoBtn.toggleAttribute("disabled", !state.canUndo());
+    redoBtn.toggleAttribute("disabled", !state.canRedo());
+    fillBtn.classList.toggle("active", state.mode === "fill");
+    crossBtn.classList.toggle("active", state.mode === "cross");
+    const left = score.squaresLeft();
+    checkSquareBtn.textContent = left === Infinity ? "🔍 Square −5" : `🔍 Square −5 (${Math.max(0, left)})`;
+    checkSquareBtn.toggleAttribute("disabled", !score.canCheckSquare());
+    updateAssistMeter();
+  }
+
+  function updateAssistMeter(): void {
+    if (!scored) {
+      assistMeter.textContent = "";
+      return;
+    }
+    if (score.voided()) {
+      assistMeter.textContent = "⚠ No score this attempt (Fill out / Watch solve used) — Restart for a clean run.";
+      return;
+    }
+    const p = score.penalty();
+    assistMeter.textContent = p > 0 ? `Assists used: −${p} to your score` : "Clean solve — no assists yet";
+  }
+
+  function scheduleSave(): void {
+    if (!fromLibrary || solved) return;
+    if (saveTimer !== null) return;
+    saveTimer = window.setTimeout(flushSave, 400);
+  }
+  function flushSave(): void {
+    if (saveTimer !== null) {
+      window.clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    if (!fromLibrary || solved) return;
+    recordProgress({ puzzleId: puzzle.id, marks: state.marks, elapsedMs: state.elapsedMs() });
+  }
+  function cancelSave(): void {
+    if (saveTimer !== null) {
+      window.clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+  }
+
+  // Auto-cross (setting): once a line's filled runs match its clue, cross the
+  // leftover cells. Guarded so the batch's own notification doesn't recurse.
+  let autoCrossing = false;
+  function applyAutoCross(): void {
+    if (!settings.autoCross || autoCrossing || solved || filledOut) return;
+    const clueMet = (filled: boolean[], clue: Clue): boolean => {
+      const got = cluesForLine(filled);
+      return got.length === clue.length && got.every((v, i) => v === clue[i]);
+    };
+    const targets: Array<[number, number]> = [];
+    for (let r = 0; r < puzzle.height; r++) {
+      const filled = state.marks[r].map((m) => m === FILLED);
+      if (!clueMet(filled, puzzle.rowClues[r])) continue;
+      for (let c = 0; c < puzzle.width; c++) if (state.marks[r][c] === UNKNOWN) targets.push([r, c]);
+    }
+    for (let c = 0; c < puzzle.width; c++) {
+      const filled = state.marks.map((row) => row[c] === FILLED);
+      if (!clueMet(filled, puzzle.colClues[c])) continue;
+      for (let r = 0; r < puzzle.height; r++) if (state.marks[r][c] === UNKNOWN) targets.push([r, c]);
+    }
+    if (targets.length === 0) return;
+    autoCrossing = true;
+    try {
+      state.batch(false, () => {
+        for (const [r, c] of targets) state.setCell(r, c, EMPTY, false);
+      });
+    } finally {
+      autoCrossing = false;
+    }
+    board.refresh();
+  }
+
+  function onChange(): void {
+    applyAutoCross();
+    board.refresh();
+    refreshControls();
+    scheduleSave();
+    if (!solved && state.isSolved()) handleWin();
+  }
+  state.subscribe(onChange);
+
+  // ---- hint ----
+  function useHint(): void {
+    const hint = nextHint(puzzle, state.marks);
+    if (!hint) {
+      banner.textContent = state.isSolved() ? "Already solved! 🎉" : "No further logical step found.";
+      return;
+    }
+    if (scored) {
+      score.useHint();
+      updateAssistMeter();
+    }
+    banner.textContent = `💡 ${hint.reason}`;
+    flashCell(hint.row, hint.col, "hinted", 1600);
+  }
+
+  // ---- checks ----
+  function armCheck(kind: "square" | "line"): void {
+    if (kind === "square" && !score.canCheckSquare()) {
+      banner.textContent = "No more square checks at this difficulty.";
+      return;
+    }
+    pendingCheck = kind;
+    board.cellsEl.classList.add("checking");
+    banner.textContent =
+      kind === "square" ? "Tap a square to reveal it (−5)." : "Tap a cell to reveal its row & column (−15).";
+  }
+
+  function onCheckClick(e: PointerEvent): void {
+    if (!pendingCheck) return;
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".cell");
+    if (!cell || cell.dataset.r === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = Number(cell.dataset.r);
+    const c = Number(cell.dataset.c);
+    const kind = pendingCheck;
+    pendingCheck = null;
+    board.cellsEl.classList.remove("checking");
+    if (kind === "square") {
+      if (scored && !score.useCheckSquare()) return;
+      state.setCell(r, c, truthAt(r, c), true);
+      flashCell(r, c, "revealed", 700);
+      banner.textContent = "";
+    } else {
+      if (scored) score.useCheckLine();
+      state.batch(true, () => {
+        for (let cc = 0; cc < puzzle.width; cc++) state.setCell(r, cc, truthAt(r, cc), false);
+        for (let rr = 0; rr < puzzle.height; rr++) state.setCell(rr, c, truthAt(rr, c), false);
+      });
+      for (let cc = 0; cc < puzzle.width; cc++) flashCell(r, cc, "revealed", 700);
+      for (let rr = 0; rr < puzzle.height; rr++) flashCell(rr, c, "revealed", 700);
+      banner.textContent = "";
+    }
+    updateAssistMeter();
+    refreshControls();
+  }
+
+  function truthAt(r: number, c: number) {
+    return puzzle.solution[r][c] ? FILLED : EMPTY;
+  }
+
+  function checkBoard(): void {
+    const wrong: Array<[number, number]> = [];
+    for (let r = 0; r < puzzle.height; r++) {
+      for (let c = 0; c < puzzle.width; c++) {
+        if (state.marks[r][c] === FILLED && !puzzle.solution[r][c]) wrong.push([r, c]);
+      }
+    }
+    if (scored) score.useCheckBoard();
+    if (wrong.length === 0) {
+      banner.textContent = "No mistakes so far. ✓";
+    } else {
+      state.batch(true, () => {
+        for (const [r, c] of wrong) state.setCell(r, c, UNKNOWN, false);
+      });
+      for (const [r, c] of wrong) flashCell(r, c, "revealed", 900);
+      banner.textContent = `Cleared ${wrong.length} mistaken ${wrong.length === 1 ? "cell" : "cells"}.`;
+    }
+    updateAssistMeter();
+  }
+
+  function flashCell(r: number, c: number, cls: string, ms: number): void {
+    const cell = board.cellsEl.querySelector<HTMLElement>(`.cell[data-r="${r}"][data-c="${c}"]`);
+    if (cell) {
+      cell.classList.add(cls);
+      window.setTimeout(() => cell.classList.remove(cls), ms);
+    }
+  }
+
+  // ---- fill out (voids) ----
+  function fillOut(): void {
+    filledOut = true;
+    if (scored) score.voidAttempt();
+    cancelSave();
+    state.pause();
+    state.batch(true, () => {
+      for (let r = 0; r < puzzle.height; r++) {
+        for (let c = 0; c < puzzle.width; c++) {
+          state.setCell(r, c, puzzle.solution[r][c] ? FILLED : EMPTY, false);
+        }
+      }
+    });
+  }
+
+  function watchSolve(): void {
+    if (scored) score.voidAttempt();
+    // Asking to be shown the answer is the clearest give-up signal there is.
+    recordAttemptSignal(false);
+    navigate(`/explain/${encodeURIComponent(puzzle.id)}`);
+  }
+
+  function restart(): void {
+    filledOut = false;
+    solved = false;
+    score.reset();
+    state.batch(true, () => {
+      for (let r = 0; r < puzzle.height; r++) {
+        for (let c = 0; c < puzzle.width; c++) state.setCell(r, c, UNKNOWN, false);
+      }
+    });
+    cancelSave();
+    if (fromLibrary) clearProgress(puzzle.id);
+    banner.textContent = "";
+    winOverlay.classList.add("hidden");
+    board.element.classList.remove("solved");
+    controls.classList.remove("hidden");
+    postSolveBar.classList.add("hidden");
+    state.start();
+    refreshControls();
+  }
+
+  // ---- win ----
+  let lastScore: { value: number; isNew: boolean } | null = null;
+
+  function handleWin(): void {
+    solved = true;
+    state.pause();
+    cancelSave();
+    pendingCheck = null;
+    board.cellsEl.classList.remove("checking");
+    playWinReveal(board);
+    const elapsed = state.elapsedMs();
+    lastScore = null;
+
+    if (filledOut) {
+      winHeading.textContent = "Filled out";
+      winEmoji.textContent = "🧩";
+      winScoreEl.textContent = "";
+      winTime.textContent = "No score — you used Fill out.";
+    } else {
+      winHeading.textContent = "Solved!";
+      winEmoji.textContent = "🎉";
+      if (fromLibrary) markCompleted(puzzle.id);
+      if (scored) {
+        const sc = puzzleScore({ difficulty: puzzle.difficulty, area, bestTimeMs: elapsed, assists: score.tally_() });
+        const rec = recordPuzzleScore(puzzle.id, sc);
+        lastScore = { value: sc, isNew: rec.isNew && sc > 0 };
+        const time = recordBestTime(puzzle.id, elapsed);
+        score.finish();
+        winScoreEl.textContent = score.voided()
+          ? "Score: 0 (assisted)"
+          : `Score: ${sc}/100${lastScore.isNew ? " · best yet!" : ""}`;
+        winTime.textContent = time.isNew ? `🏅 New best time — ${formatTime(elapsed)}` : `Time ${formatTime(elapsed)} · Best ${formatTime(time.best)}`;
+      } else {
+        winScoreEl.textContent = "";
+        winTime.textContent = `Time: ${formatTime(elapsed)}`;
+      }
+    }
+
+    // Teach the progression model what this attempt looked like, after the score
+    // is settled so the assist tally is final.
+    recordAttemptSignal(true);
+
+    winNote.textContent = puzzle.note ? `ℹ ${puzzle.note}` : "";
+    winOverlay.setAttribute("aria-label", filledOut ? "Puzzle filled out" : "Puzzle solved");
+    winClose.setAttribute("aria-label", filledOut ? "Close" : "Close and admire the picture");
+    buildActions(winActions, "popup");
+    window.setTimeout(() => {
+      winOverlay.classList.remove("hidden");
+      (winOverlay.querySelector(".win-actions .btn") as HTMLElement | null)?.focus();
+    }, 650);
+  }
+
+  /** Build the action buttons for either the popup or the post-solve bar. */
+  function buildActions(into: HTMLElement, where: "popup" | "bar"): void {
+    into.replaceChildren();
+    const shareBtn = el("button", { class: "btn", text: "🔗 Share", on: { click: () => doShare(shareBtn) } });
+    if (isTest) {
+      into.append(
+        el("button", { class: "btn primary", text: "‹ Back to editor", on: { click: () => navigate(testReturn!) } }),
+        where === "popup"
+          ? el("button", { class: "btn ghost", text: "Admire", on: { click: closeWinOverlay } })
+          : el("button", { class: "btn ghost", text: "↺ Try again", on: { click: restart } }),
+      );
+      return;
+    }
+    if (!filledOut) into.append(shareBtn);
+    if (fromLibrary) {
+      into.append(el("button", { class: "btn primary", text: "Next puzzle →", on: { click: goNext } }));
+    } else if (isCustomSaved) {
+      into.append(
+        el("button", { class: "btn primary", text: "✏️ Edit", on: { click: () => navigate(`/editor/${encodeURIComponent(puzzle.id)}`) } }),
+      );
+    }
+    if (where === "bar") into.append(el("button", { class: "btn", text: "↺ Play again", on: { click: restart } }));
+    into.append(el("button", { class: "btn ghost", text: "Menu", on: { click: () => navigate("/") } }));
+  }
+
+  function closeWinOverlay(): void {
+    winOverlay.classList.add("hidden");
+    // Swap the solving tools for a clean post-solve bar so Next is one tap away.
+    controls.classList.add("hidden");
+    buildActions(postSolveBar, "bar");
+    postSolveBar.classList.remove("hidden");
+    banner.replaceChildren();
+    if (!filledOut && scored && lastScore) {
+      banner.textContent = `🎉 Solved · Score ${lastScore.value}/100`;
+    }
+    (postSolveBar.querySelector(".btn") as HTMLElement | null)?.focus();
+  }
+
+  async function doShare(btn: HTMLElement): Promise<void> {
+    const url = puzzleLink(puzzle, fromLibrary);
+    const scoreBit = !filledOut && scored && lastScore ? ` (scored ${lastScore.value}/100)` : "";
+    const text = `I solved “${puzzle.title}” on Clueweave in ${formatTime(state.elapsedMs())}${scoreBit}! ▦`;
+    const outcome = await shareResult(text, url);
+    if (outcome === "copied") {
+      const old = btn.textContent;
+      btn.textContent = "✓ Link copied!";
+      window.setTimeout(() => (btn.textContent = old), 1800);
+    } else if (outcome === "failed") {
+      banner.textContent = "Couldn't open share — copy the link from the address bar.";
+    }
+  }
+
+  /**
+   * The win popup's "Next puzzle →". Follows the progression model, so a string
+   * of solves walks forward through the curriculum instead of looping back to an
+   * Easy the way raw library order used to.
+   */
+  function goNext(): void {
+    const target = currentSmartTarget();
+    if (!target) {
+      navigate("/");
+      return;
+    }
+    navigate(`/play/${encodeURIComponent(target.puzzleId)}`);
+  }
+
+  function currentSmartTarget(): Recommendation | null {
+    const now = loadSave();
+    return smartNextTarget(
+      now.progression,
+      puzzle.id,
+      now.settings,
+      LIBRARY,
+      new Set(now.completed),
+      now.bestScores,
+    );
+  }
+
+  /** The sheened top-right arrow. */
+  function onSmartNext(): void {
+    const now = loadSave();
+    const target = currentSmartTarget();
+    if (!target) {
+      banner.textContent = "That's the last puzzle in the run — nothing after it.";
+      return;
+    }
+    // Each press counts toward the spam guard; any finished attempt clears it.
+    const updated = patchProgression({
+      smartNextUses: now.progression.smartNextUses + 1,
+      spamCount: now.progression.spamCount + 1,
+    });
+    const go = (): void => navigate(`/play/${encodeURIComponent(target.puzzleId)}`);
+    if (shouldPromptSmartNext(updated, now.settings)) openSmartNextPrompt(target, go);
+    else go();
+  }
+
+  /** On the first few uses, explain the pick and offer to turn the sheen off. */
+  function openSmartNextPrompt(target: Recommendation, proceed: () => void): void {
+    const pick = LIBRARY.find((p) => p.id === target.puzzleId);
+    const answer = (keepSmart: boolean): void => {
+      if (!keepSmart) setSettings({ smartNext: false });
+      patchProgression({ smartNextPrompted: true });
+      modal.close();
+      proceed();
+    };
+    const body = el("div", { class: "smart-prompt" }, [
+      el("p", { class: "smart-pick" }, [
+        el("strong", { text: pick?.title ?? "Next puzzle" }),
+        el("span", {
+          class: `chip ${difficultyMeta(target.tier).className}`,
+          text: difficultyMeta(target.tier).label,
+        }),
+      ]),
+      el("p", { class: "smart-reason", text: target.reason }),
+      el("p", {
+        class: "smart-explain",
+        text:
+          "This arrow picks your next puzzle from how you're going — moving you up a level when you solve quickly, and easing off when you keep getting stuck. You can change this any time in Settings.",
+      }),
+      el("div", { class: "smart-actions" }, [
+        el("button", { class: "btn primary", text: "Keep choosing for me", on: { click: () => answer(true) } }),
+        el("button", { class: "btn ghost", text: "Just go in order", on: { click: () => answer(false) } }),
+      ]),
+    ]);
+    const modal = openModal({ title: "Picked for you", body, className: "smart-prompt-modal" });
+  }
+
+  /**
+   * Fold this attempt's outcome into the progression model. Only built-in library
+   * puzzles teach it anything — custom and test-play puzzles are not graded.
+   */
+  function recordAttemptSignal(didSolve: boolean): void {
+    if (!fromLibrary) return;
+    const now = loadSave();
+    const signal = classifySignal(
+      {
+        solved: didSolve,
+        voided: filledOut || score.voided(),
+        assists: score.tally_(),
+        elapsedMs: state.elapsedMs(),
+        difficulty: puzzle.difficulty,
+        area,
+      },
+      now.settings,
+    );
+    setProgression(applySignal(signal, now.progression, now.settings, LIBRARY, new Set(now.completed)));
+  }
+
+  // ---- win-dialog keyboard a11y ----
+  function onWinKey(e: KeyboardEvent): void {
+    if (winOverlay.classList.contains("hidden")) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeWinOverlay();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const f = Array.from(winCard.querySelectorAll<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')).filter(
+      (n) => !n.hasAttribute("disabled") && n.offsetParent !== null,
+    );
+    if (f.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = f[0];
+    const last = f[f.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!winCard.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+  document.addEventListener("keydown", onWinKey);
+  board.cellsEl.addEventListener("pointerdown", onCheckClick, true); // capture before paint
+
+  // ---- start ----
+  applySettings();
+  state.start();
+  refreshControls();
+  const tick = window.setInterval(() => {
+    if (!solved) timerEl.textContent = formatTime(state.elapsedMs());
+  }, 500);
+
+  // One introductory sweep once the view has settled — enough to catch the eye
+  // on arrival without animating for the whole solve. The class is dropped when
+  // the sweep finishes so a later hover can replay it cleanly.
+  smartNextBtn.addEventListener("animationend", () => smartNextBtn.classList.remove("sheen-intro"));
+  const sheenTimer = window.setTimeout(() => {
+    if (settings.smartNext) smartNextBtn.classList.add("sheen-intro");
+  }, 650);
+
+  return () => {
+    window.clearTimeout(sheenTimer);
+    window.clearInterval(tick);
+    document.removeEventListener("keydown", onWinKey);
+    board.cellsEl.removeEventListener("pointerdown", onCheckClick, true);
+    state.pause();
+    flushSave();
+    detachInput();
+    board.destroy();
+  };
+}

@@ -1,0 +1,16 @@
+.build/
+*.xcodeproj
+.DS_Store
+DerivedData/
+
+# xcodegen-generated (written from project.yml on `xcodegen generate`)
+Support/Info-iOS.plist
+Support/Info-Watch.plist
+Support/Info-Widgets.plist
+Support/Info-WatchComplications.plist
+Support/*.entitlements
+Package.resolved
+*.pbxproj
+
+# local SwiftPM/Xcode state
+.swiftpm/
