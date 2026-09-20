@@ -1,20 +1,28 @@
 name: Deploy to GitHub Pages
 
+# This is a monorepo: `web/` is the site, `apple/` is the native port.
+# Only the web half is built and published, and only changes that can affect
+# the site trigger a deploy.
 on:
   push:
     branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
-# Allow the workflow to publish to Pages.
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Only one concurrent deployment; cancel in-progress runs of the same group.
 concurrency:
   group: pages
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
 
 jobs:
   build:
@@ -23,6 +31,10 @@ jobs:
       # The smoke test (Playwright) only runs locally; CI just needs unit tests +
       # build, so skip the browser download during `npm ci`.
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      # A project site is served from /<repo>/, so the Vite base must match the
+      # repository name rather than a hard-coded string — that way renaming the
+      # repo can't silently ship a build with the wrong asset paths.
+      BASE_PATH: /${{ github.event.repository.name }}/
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +44,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -45,7 +58,8 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          # Paths here are relative to the workspace root, not working-directory.
+          path: web/dist
 
   deploy:
     needs: build
