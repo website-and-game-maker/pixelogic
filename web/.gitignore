@@ -1,4 +1,6 @@
 node_modules/
+# ...and as a bare name, so a node_modules *symlink* is ignored too
+node_modules
 dist/
 *.local
 .DS_Store
