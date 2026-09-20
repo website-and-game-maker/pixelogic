@@ -29,6 +29,19 @@ export function grade(rowClues: Clue[], colClues: Clue[]): Difficulty {
   return "hard";
 }
 
+// Below this effort score a contradiction puzzle is "Extra Hard" (expert); at
+// or above it, "Max". Chosen from measured effort on the library's contradiction
+// puzzles (`npx vite-node scripts/tune.ts`):
+//   true Expert-tier puzzles today top out at Enigma, effort ≈197.5
+//   true Max-tier puzzles today start at Leviathan, effort ≈231.5
+// 200 sat right on top of Enigma with only a ~2.5 margin — a hair's-width cliff
+// where a one-step change in the solver could silently flip its tier. 215 is
+// the (rounded) midpoint of the real 197.5–231.5 gap in the data, so it keeps
+// both neighbors comfortably clear on their existing side while leaving room
+// for the new mid-effort Expert puzzles (added to close the old 44→113 gap)
+// to land anywhere up to ~200 without crowding the boundary.
+const EXPERT_MAX_EFFORT_CUTOFF = 215;
+
 /**
  * Grade a full solution grid:
  *  - contradiction puzzles are split into Extra Hard vs Max by total reasoning
@@ -36,13 +49,23 @@ export function grade(rowClues: Clue[], colClues: Clue[]): Difficulty {
  *  - a symmetric picture leaks information → capped at Hard;
  *  - a patterned picture (one run per line) is mostly "continue the shape" →
  *    capped at Medium.
+ *  Both whole-picture caps are shortcuts for *line* solving only — mirroring a
+ *  row's clue gives you its twin for free, and continuing a single run is easy
+ *  to guess. Neither shortcut helps a hypothesis/contradiction proof: proving a
+ *  cell is forced by contradiction takes the same what-if propagation whether
+ *  or not the rest of the grid happens to mirror or run-continue. So a puzzle
+ *  that needed contradiction reasoning (not line-solvable) is never capped by
+ *  either rule — a what-if proof stays a what-if proof regardless of the
+ *  picture's shape. (Regression: "Letter A" is left-right symmetric AND needs
+ *  one contradiction step; it must grade `expert`, not get dragged to `hard`.)
  */
 export function gradeGrid(solution: boolean[][]): Difficulty {
   const { rowClues, colClues } = cluesForGrid(solution);
   const area = solution.length * (solution[0]?.length ?? 0);
 
+  const lineSolvable = isLineSolvable(rowClues, colClues);
   let d: Difficulty;
-  if (isLineSolvable(rowClues, colClues)) {
+  if (lineSolvable) {
     d = grade(rowClues, colClues);
   } else {
     const { steps } = solveByLogic(rowClues, colClues);
@@ -50,11 +73,13 @@ export function gradeGrid(solution: boolean[][]): Difficulty {
     // Effort blends the number of what-if proofs (weighted heavily — each is a
     // full sub-deduction), the sheer number of forced steps, and the line size.
     const effort = steps.length + 15 * contradictions + area / 2;
-    d = effort >= 200 ? "max" : "expert";
+    d = effort >= EXPERT_MAX_EFFORT_CUTOFF ? "max" : "expert";
   }
 
-  if (isSymmetric(solution)) d = capAt(d, "hard");
-  if (detectPatterned(solution)) d = capAt(d, "medium");
+  if (lineSolvable) {
+    if (isSymmetric(solution)) d = capAt(d, "hard");
+    if (detectPatterned(solution)) d = capAt(d, "medium");
+  }
   return d;
 }
 

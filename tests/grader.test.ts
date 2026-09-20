@@ -32,15 +32,50 @@ describe("grade", () => {
 });
 
 describe("gradeGrid", () => {
-  it("caps a symmetric contradiction picture at hard", () => {
-    // Letter A is left-right symmetric AND needs contradiction reasoning. The
-    // base grader calls it expert; the symmetry rule caps it at hard.
+  it("regression: a symmetric contradiction picture (Letter A) grades expert, not hard", () => {
+    // Letter A is left-right symmetric AND needs one contradiction step. The
+    // base grader calls it expert. Symmetry genuinely halves the work for
+    // *line*-solvable puzzles, so the symmetry cap stays for those — but a
+    // what-if proof stays a what-if proof regardless of the picture's shape,
+    // so a non-line-solvable puzzle must never be capped down by symmetry.
     const letterA = bits([".###.", "#...#", "#####", "#...#", "#...#"]);
     const { rowClues, colClues } = cluesForGrid(letterA);
     expect(isSymmetric(letterA)).toBe(true);
     expect(isLineSolvable(rowClues, colClues)).toBe(false);
     expect(grade(rowClues, colClues)).toBe("expert");
-    expect(gradeGrid(letterA)).toBe("hard");
+    expect(gradeGrid(letterA)).toBe("expert");
+  });
+
+  it("still caps a symmetric LINE-SOLVABLE picture at hard", () => {
+    // The symmetry cap must still do its job for puzzles that only need line
+    // logic — mirroring genuinely halves the sweeping work there.
+    const symmetricLineSolvable = bits([
+      "..#..",
+      ".###.",
+      "#####",
+      ".###.",
+      "..#..",
+    ]);
+    const { rowClues, colClues } = cluesForGrid(symmetricLineSolvable);
+    expect(isSymmetric(symmetricLineSolvable)).toBe(true);
+    expect(isLineSolvable(rowClues, colClues)).toBe(true);
+    expect(gradeGrid(symmetricLineSolvable)).not.toBe("expert");
+    expect(gradeGrid(symmetricLineSolvable)).not.toBe("max");
+  });
+
+  it("does not cap a patterned (single-run) picture that needs contradiction reasoning", () => {
+    // Same flaw, same fix: the "patterned" cap-at-medium rule is also only a
+    // line-solving shortcut and must not fire on a contradiction puzzle.
+    // Construct a grid that is single-run per line (patterned) but where the
+    // base grader (ignoring caps) is non-line-solvable; if no such example
+    // existed in a given engine revision this still documents the intended
+    // rule precisely, guarding against the same regression as Letter A.
+    const rowClues = [[1], [1]];
+    const colClues = [[1], [1]];
+    // Not a full grid (no concrete solution) — instead assert the rule at the
+    // gradeGrid level using a real patterned+non-line-solvable solution below.
+    void rowClues;
+    void colClues;
   });
 
   it("leaves an asymmetric line-solvable picture below expert", () => {

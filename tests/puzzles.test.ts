@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { LIBRARY, getPuzzle, byDifficulty } from "../src/engine/puzzles";
 import { hasUniqueSolution, isLineSolvable, solve } from "../src/engine/solver";
 import { isLogicSolvable } from "../src/engine/deduce";
-import { isSymmetric } from "../src/engine/symmetry";
+import { gradeGrid } from "../src/engine/grader";
 
 describe("puzzle library invariants", () => {
   it("ships a healthy number of puzzles", () => {
@@ -35,10 +35,11 @@ describe("puzzle library invariants", () => {
           expect(lineSolvable).toBe(true); // pure line logic
         }
         if (p.difficulty === "expert" || p.difficulty === "max") {
-          // Extra Hard / Max genuinely need contradiction, and are never symmetric
-          // (a symmetric picture is capped at Hard).
+          // Extra Hard / Max genuinely need contradiction reasoning. Whole-picture
+          // shortcuts (symmetry, single-run patterning) only make pure line
+          // solving cheaper, so they never demote a contradiction puzzle — an
+          // expert/max entry MAY be symmetric or patterned (see "Letter A").
           expect(lineSolvable).toBe(false);
-          expect(isSymmetric(p.solution)).toBe(false);
         }
       });
       it("the engine's solution matches the stored picture", () => {
@@ -49,8 +50,26 @@ describe("puzzle library invariants", () => {
         expect(p.rowClues.length).toBe(p.height);
         expect(p.colClues.length).toBe(p.width);
       });
+      it("difficulty matches a fresh re-grade (no drift, no hand-set override)", () => {
+        // Every library entry must let the grader decide its tier — re-deriving
+        // it here catches both grader-logic drift and any curated puzzle that
+        // silently disagrees with (or overrides) what the grader computes.
+        expect(p.difficulty).toBe(gradeGrid(p.solution));
+      });
     });
   }
+});
+
+describe("tier population", () => {
+  // Beta feedback: Hard puzzles were too easy (line-sweeping only) and Extra
+  // Hard puzzles were too hard (a 113-197 effort cliff with nothing below it).
+  // These floors keep both tiers populated with a real difficulty ramp.
+  it("has at least 8 Hard puzzles", () => {
+    expect(byDifficulty("hard").length).toBeGreaterThanOrEqual(8);
+  });
+  it("has at least 8 Extra Hard (expert) puzzles", () => {
+    expect(byDifficulty("expert").length).toBeGreaterThanOrEqual(8);
+  });
 });
 
 describe("getPuzzle", () => {
