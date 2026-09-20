@@ -866,6 +866,9 @@ button.cell {
 .view.menu {
   position: relative;
 }
+/* The three icon buttons float top-right, overlapping the centred brand block.
+   Anchor them to the .view content box (not the viewport) so the collision
+   point is predictable at every window size — see the responsive rule below. */
 .menu-tools {
   position: absolute;
   top: var(--s3);
@@ -873,6 +876,20 @@ button.cell {
   display: flex;
   gap: var(--s2);
   z-index: 5;
+}
+/* Measured: the brand block (52px logo + the title at 2.6rem) is ~310px wide
+   and the tool cluster ~148px, so on a 600px viewport the centred brand reaches
+   x=455 while the icons start at x=436 — a 19px collision. The only breakpoint
+   was 560px, leaving a 560–700px band (small laptops, half-width desktop
+   windows) where the title ran under the buttons. Below 700px the tools leave
+   the overlay for normal flow, right-aligned above the brand, where they cannot
+   collide at any width. */
+@media (max-width: 700px) {
+  .menu-tools {
+    position: static;
+    justify-content: flex-end;
+    margin-bottom: var(--s2);
+  }
 }
 .menu-actions {
   gap: var(--s2);
