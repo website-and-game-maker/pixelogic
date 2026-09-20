@@ -1,7 +1,7 @@
-// Pixelogic for iPhone & iPad — free, no ads, no accounts, fully on-device.
+// Clueweave for iPhone & iPad — free, no ads, no accounts, fully on-device.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -46,17 +46,63 @@ final class AppModel: ObservableObject {
         objectWillChange.send()
     }
 
+    // MARK: - Progression (docs/progression-model.md)
+
+    func noteSmartNextUse() {
+        store.noteSmartNextUse()
+        objectWillChange.send()
+    }
+
+    func markSmartNextPrompted() {
+        store.markSmartNextPrompted()
+        objectWillChange.send()
+    }
+
+    func setSmartNext(_ on: Bool) {
+        var s = store.settings
+        s.progression.smartNext = on
+        store.settings = s
+        objectWillChange.send()
+    }
+
+    func updateProgressionSettings(_ mutate: (inout ProgressionSettings) -> Void) {
+        var s = store.settings
+        mutate(&s.progression)
+        store.settings = s
+        objectWillChange.send()
+    }
+
+    func resetProgressionState() {
+        store.progression = ProgressionState()
+        objectWillChange.send()
+    }
+
     /// Resolve a puzzle for routes that may point at library, custom, or generated art.
     func anyPuzzle(withID id: String) -> Puzzle? {
-        PixelogicKit.puzzle(withID: id)
+        ClueweaveKit.puzzle(withID: id)
             ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
             ?? store.generatedPuzzles.first(where: { $0.id == id })?.asPuzzle
     }
 }
 
 @main
-struct PixelogicApp: App {
+struct ClueweaveApp: App {
     @StateObject private var app = AppModel()
+
+    /// The rebrand renamed the app-name-prefixed `@AppStorage` keys. `PlayerStore`
+    /// migrates the save blob itself; this picks up the loose UI preferences that
+    /// live outside it, so nothing silently reverts to its default.
+    init() {
+        let defaults = UserDefaults.standard
+        for suffix in ["highVisibility"] {
+            let old = "pixelogic.ios.\(suffix)"
+            let new = "clueweave.ios.\(suffix)"
+            guard defaults.object(forKey: new) == nil,
+                  let value = defaults.object(forKey: old) else { continue }
+            defaults.set(value, forKey: new)
+            defaults.removeObject(forKey: old)
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -108,11 +154,11 @@ struct PixelogicApp: App {
         }
     }
 
-    /// pixelogic://p/<token> (and the web URL form) → validate, import & play.
+    /// clueweave://p/<token> (and the web URL form) → validate, import & play.
     private func openSharedPuzzle(_ url: URL) {
         guard let token = shareToken(fromUserInput: url.absoluteString),
               let decoded = try? decodePuzzle(token) else {
-            app.importError = "That link isn’t a Pixelogic puzzle."
+            app.importError = "That link isn’t a Clueweave puzzle."
             return
         }
         Task {

@@ -1,4 +1,4 @@
-// Pixelogic design system, translated 1:1 from the web app's CSS custom
+// Clueweave design system, translated 1:1 from the web app's CSS custom
 // properties (src/style.css :root). Baby-blue / turquoise, round corners,
 // generous whitespace, SF Rounded in place of Nunito.
 //
@@ -8,11 +8,11 @@
 
 import SwiftUI
 import UIKit
-import PixelogicKit
+import ClueweaveKit
 
 // SwiftUI also defines a `Grid` (a layout view); a module-level alias makes
 // every unqualified `Grid` in this target mean the engine's cell grid.
-typealias Grid = PixelogicKit.Grid
+typealias Grid = ClueweaveKit.Grid
 
 extension Color {
     init(hex: UInt32) {
@@ -70,6 +70,14 @@ enum Theme {
     static let symmetryInk = Color(lightHex: 0x0B7E89, darkHex: 0x6FE2EC)
 
     static let gold = Color(lightHex: 0xE3B23C, darkHex: 0xEAC257)
+
+    /// Laurel tier tints. These used to live *inside* the laurel bitmaps, which
+    /// were rasterized from the system emoji font and so could not be shipped.
+    /// The laurel is now an SF Symbol tinted at runtime, which means the medal
+    /// tiers need real color tokens. Placeholders — fold them into the palette
+    /// during the color pass.
+    static let bronze = Color(lightHex: 0xB5773A, darkHex: 0xC98F4F)
+    static let silver = Color(lightHex: 0x8FA3AC, darkHex: 0xB3C4CC)
 
     /// "Too many filled squares in this line" warning. A calm plum — clearly
     /// distinct from the red mistake cue and the teal brand, visible without

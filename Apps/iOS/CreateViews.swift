@@ -1,16 +1,16 @@
 // The interactive tutorial and the custom-puzzle editor.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 // MARK: - Tutorial
 
 struct TutorialView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
+    @AppStorage("clueweave.ios.highVisibility") private var highVisibility = false
 
-    private let puzzle = PixelogicKit.puzzle(withID: "plus")!
+    private let puzzle = ClueweaveKit.puzzle(withID: "plus")!
     @State private var session: GameSession
     @State private var marks: Grid
     @State private var stepIndex = 0
@@ -25,7 +25,7 @@ struct TutorialView: View {
     }
 
     private let steps: [Step] = [
-        Step(text: "Welcome to Pixelogic! 👋 The numbers around the grid tell you the runs of filled cells in each row and column. Let's solve this little 5×5 together.",
+        Step(text: "Welcome to Clueweave! 👋 The numbers around the grid tell you the runs of filled cells in each row and column. Let's solve this little 5×5 together.",
              mode: nil, goal: nil, want: .filled),
         Step(text: "Row 3's clue is 5 — and the grid is 5 wide, so the whole row is filled. Tap each highlighted cell to fill it.",
              mode: .paint, goal: [(2, 0), (2, 1), (2, 2), (2, 3), (2, 4)], want: .filled),
@@ -38,7 +38,7 @@ struct TutorialView: View {
     ]
 
     init() {
-        let p = PixelogicKit.puzzle(withID: "plus")!
+        let p = ClueweaveKit.puzzle(withID: "plus")!
         let s = GameSession(puzzle: p)
         _session = State(initialValue: s)
         _marks = State(initialValue: s.marks)

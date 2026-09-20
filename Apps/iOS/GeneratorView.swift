@@ -3,7 +3,7 @@
 // the good ones to the developer.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 struct GeneratorView: View {
     @EnvironmentObject private var app: AppModel
@@ -136,6 +136,6 @@ struct GeneratorView: View {
     private func sendURL(for puzzle: Puzzle) -> URL {
         let link = webShareURL(forToken: encodePuzzle(puzzle.solution, title: puzzle.title)).absoluteString
         let body = "I generated a \(puzzle.width)×\(puzzle.height) \(puzzle.difficulty.displayName) puzzle worth sharing:\n\n\(link)"
-        return SuggestionMail.url(subject: "Pixelogic generated puzzle", body: body)
+        return SuggestionMail.url(subject: "Clueweave generated puzzle", body: body)
     }
 }

@@ -1,4 +1,4 @@
-# App Store readiness audit — Pixelogic
+# App Store readiness audit — Clueweave
 
 Audited against Apple's **App Review Guidelines** (fetched 2026-06-11 from
 developer.apple.com/app-store/review/guidelines) as a reviewer would, plus the
@@ -8,12 +8,12 @@ required-reason API rules. Each item cites the guideline.
 
 | Guideline | Requirement | Status |
 |---|---|---|
-| **2.1 Completeness** | Final build, tested on-device, no placeholders | ◐ Engine verified on this machine (300 checks, `swift run pixelogic-verify`). UI must be run once in Xcode + simulators before submission (no Xcode on the build machine — see "Remaining human steps"). No placeholder content anywhere. |
+| **2.1 Completeness** | Final build, tested on-device, no placeholders | ◐ Engine verified on this machine (300 checks, `swift run clueweave-verify`). UI must be run once in Xcode + simulators before submission (no Xcode on the build machine — see "Remaining human steps"). No placeholder content anywhere. |
 | **2.3 Accurate metadata** | Screenshots of real gameplay, honest description | ☐ Take screenshots in the simulator at submission time (home, play, win, editor, watch). Description draft in README. |
 | **2.3.6 / 2.3.8 Age rating** | Honest rating, 4+-appropriate metadata | ✓ Pure logic puzzles, no objectionable content → 4+. |
 | **2.4.2 Power** | No battery drain / heat | ✓ No background work, no timers beyond a 0.5 s UI tick during active play, no network. Canvas redraws only on state change. |
 | **2.5.16 / watchOS** | Watch app self-contained | ✓ Standalone `WKApplication`; engine + puzzles ship in the binary; no phone dependency. |
-| **4.1 Copycats** | Original work | ✓ Original puzzle art, original scoring system (Pixelogic Score), original engine. Nonograms as a genre are public domain. |
+| **4.1 Copycats** | Original work | ✓ Original puzzle art, original scoring system (Clueweave Score), original engine. Nonograms as a genre are public domain. |
 | **4.2 Minimum functionality** | Beyond a repackaged website | ✓ Fully native SwiftUI; offline; haptics on watch; share sheets; no web views at all. |
 | **4.3 Spam/quality** | "Meaningfully different or improved" | ✓ Uniqueness-proving engine, explainable hints, score system, editor — differentiators documented in the About screen. |
 | **5.1.1(i) Privacy policy** | Link in metadata AND in-app | ✓ In-app: Settings → Privacy + About → "Your privacy". For App Store Connect, use the same URL (the game's About page) or a dedicated page. |
@@ -41,7 +41,7 @@ required-reason API rules. Each item cites the guideline.
    (`#/play/<local-id>`); it now shares the encoded-token URL, so the link
    actually opens the puzzle anywhere.
 8. There was **no way to receive a shared puzzle** (`decodePuzzle` was dead
-   code): added a `pixelogic://` URL scheme + `onOpenURL`, and a paste-import
+   code): added a `clueweave://` URL scheme + `onOpenURL`, and a paste-import
    sheet on Home that accepts the web link, the app link, or a bare token —
    with junk-input handling and duplicate-import dedupe.
 9. Deleting a custom puzzle from its context menu didn't refresh the Home
@@ -97,7 +97,7 @@ required-reason API rules. Each item cites the guideline.
     decodes element by element — a bad entry is skipped, the rest survive.
 24. A deep link arriving during the first-launch tutorial cover would queue
     the puzzle behind it; the tutorial is now dismissed when a link opens.
-25. A bad or non-unique `pixelogic://` link used to no-op silently; it now
+25. A bad or non-unique `clueweave://` link used to no-op silently; it now
     shows an explanatory alert.
 26. De-risked an `if`-expression in the editor (`drawnPuzzle`) into plain
     statements — the app targets can't be compiled on this machine, so exotic
@@ -108,7 +108,7 @@ required-reason API rules. Each item cites the guideline.
 The in-app generator produces only **line-solvable** grids, which are
 mathematically guaranteed to have exactly one solution and to be solvable by
 pure logic — so generated puzzles uphold the same guarantee as the curated
-library (verified by `pixelogic-verify`). They are graded by the engine
+library (verified by `clueweave-verify`). They are graded by the engine
 (easy–hard; expert/MAX never arise from line-solvable grids), carry only
 auto-detected badges (symmetric/patterned — never name-hint, since titles are
 generic), persist in a separate **Generated** library that survives a progress
@@ -118,9 +118,9 @@ entirely on-device.
 
 ## Remaining human steps (cannot be done on this machine — no Xcode/simulators)
 
-1. `brew install xcodegen && xcodegen generate` → open `Pixelogic.xcodeproj`.
+1. `brew install xcodegen && xcodegen generate` → open `Clueweave.xcodeproj`.
 2. Set your Apple Developer team; build & run on iPhone, iPad and Watch
-   simulators; run the `PixelogicKitTests` suite (Swift Testing) in Xcode.
+   simulators; run the `ClueweaveKitTests` suite (Swift Testing) in Xcode.
 3. ~~Drop the app icon into asset catalogs~~ — done in-repo
    (`Apps/*/Assets.xcassets`, single-size 1024, Xcode auto-scales).
 4. Take App Store screenshots (6.7", 13", and watch sizes) of real gameplay (2.3.3).

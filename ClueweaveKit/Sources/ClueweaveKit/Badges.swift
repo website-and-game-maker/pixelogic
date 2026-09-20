@@ -1,5 +1,5 @@
 // Puzzle badges (port of src/engine/badges.ts): self-descriptive traits that
-// shift a puzzle's weight in the overall Pixelogic Score. <1 = easier.
+// shift a puzzle's weight in the overall Clueweave Score. <1 = easier.
 
 public enum BadgeKey: String, CaseIterable, Sendable {
     case symmetric, named, patterned
@@ -7,7 +7,7 @@ public enum BadgeKey: String, CaseIterable, Sendable {
     public var name: String {
         switch self {
         case .symmetric: "Symmetric"
-        case .named: "Name hint"
+        case .named: "Name-hint"
         case .patterned: "Patterned"
         }
     }
@@ -80,6 +80,29 @@ public func detectPatterned(_ grid: [[Bool]]) -> Bool {
     return true
 }
 
+/// Plain-English meaning of every code the Symmetric chip can show. The chip is
+/// terse by necessity ("◈ Symmetric · H"), so this is the single source of truth
+/// the help surfaces read from — keep it in sync with `symmetryDetail` below.
+public struct SymmetryCode: Sendable, Equatable {
+    public let code: String
+    public let meaning: String
+}
+
+public let symmetryLegend: [SymmetryCode] = [
+    SymmetryCode(
+        code: "H",
+        meaning: "Mirrors left ↔ right. Fold it down the middle and the two halves match."),
+    SymmetryCode(
+        code: "V",
+        meaning: "Mirrors top ↔ bottom. Fold it across the middle and the two halves match."),
+    SymmetryCode(
+        code: "H+V",
+        meaning: "Mirrors both ways at once — left ↔ right and top ↔ bottom."),
+    SymmetryCode(
+        code: "180°",
+        meaning: "No mirror, but turn the picture upside-down and you get the same picture."),
+]
+
 /// Human detail for the symmetric badge: which way the picture mirrors.
 public func symmetryDetail(_ grid: [[Bool]]) -> String? {
     let s = detectSymmetry(grid)
@@ -97,7 +120,7 @@ public func puzzleBadges(solution: [[Bool]], named: Bool) -> [Badge] {
         badges.append(Badge(key: .symmetric, label: "◈ Symmetric · \(detail)"))
     }
     if named {
-        badges.append(Badge(key: .named, label: "🏷 Name hint"))
+        badges.append(Badge(key: .named, label: "🏷 Name-hint"))
     }
     if detectPatterned(solution) {
         badges.append(Badge(key: .patterned, label: "▤ Patterned"))
@@ -109,7 +132,7 @@ public func puzzleBadges(_ puzzle: Puzzle) -> [Badge] {
     puzzleBadges(solution: puzzle.solution, named: puzzle.named)
 }
 
-/// Combined Pixelogic-Score weight multiplier for a puzzle's badges.
+/// Combined Clueweave-Score weight multiplier for a puzzle's badges.
 public func badgeWeightMultiplier(_ badges: [Badge]) -> Double {
     badges.reduce(1) { $0 * $1.multiplier }
 }

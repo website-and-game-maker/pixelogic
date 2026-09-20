@@ -2,11 +2,11 @@
 // Unlike anchored coach-marks, these are self-contained cards — robust on every
 // device size. Each card pairs an SF Symbol / small illustration with a short,
 // rounded-Theme explanation of one feature: the toolbar, puzzle tiles, badges,
-// the Pixelogic Score, creating/importing puzzles, and My Puzzles. Finishing or
+// the Clueweave Score, creating/importing puzzles, and My Puzzles. Finishing or
 // skipping sets store.tourSeen = true so it never reappears uninvited.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 struct TourView: View {
     @EnvironmentObject private var app: AppModel
@@ -118,7 +118,7 @@ private struct TourCard: Identifiable {
         // 0 — Welcome
         TourCard(
             title: "Welcome aboard",
-            body: "You've learned how to solve a grid — now here's a 30-second tour of everything else Pixelogic can do. Swipe or tap Next to begin."
+            body: "You've learned how to solve a grid — now here's a 30-second tour of everything else Clueweave can do. Swipe or tap Next to begin."
         ) {
             TourGlyph(systemName: "map.fill", tint: Theme.primaryDeep)
         },
@@ -146,7 +146,7 @@ private struct TourCard: Identifiable {
         // 3 — Badges intro + the three keys
         TourCard(
             title: "What badges mean",
-            body: "Badges flag a picture's helpful traits — and each one gently weights your Pixelogic Score, because some make a puzzle a little easier."
+            body: "Badges flag a picture's helpful traits — and each one gently weights your Clueweave Score, because some make a puzzle a little easier."
         ) {
             VStack(spacing: 12) {
                 ForEach(BadgeKey.allCases, id: \.self) { key in
@@ -155,10 +155,10 @@ private struct TourCard: Identifiable {
             }
         },
 
-        // 4 — Pixelogic Score
+        // 4 — Clueweave Score
         TourCard(
-            title: "Your Pixelogic Score",
-            body: "The laurel at the top of the menu is your Pixelogic Score, from 0 to 1600. It sums your best result on every puzzle, weighted by difficulty and badges — your one number for mastery of the whole library."
+            title: "Your Clueweave Score",
+            body: "The laurel at the top of the menu is your Clueweave Score, from 0 to 1600. It sums your best result on every puzzle, weighted by difficulty and badges — your one number for mastery of the whole library."
         ) {
             ScoreLaurelMock()
         },
@@ -372,7 +372,7 @@ private struct ScoreLaurelMock: View {
                 .shadow(color: Theme.primaryDeep.opacity(0.12), radius: 10, y: 4)
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Example Pixelogic Score laurel, 742 of 1600")
+        .accessibilityLabel("Example Clueweave Score laurel, 742 of 1600")
     }
 }
 

@@ -2,26 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Let players generate brand-new, provably-solvable Pixelogic puzzles, save them to a "Generated" library (divided by difficulty, with symmetric/patterned badges), play them, share them by link, and send the good ones to the developer.
+**Goal:** Let players generate brand-new, provably-solvable Clueweave puzzles, save them to a "Generated" library (divided by difficulty, with symmetric/patterned badges), play them, share them by link, and send the good ones to the developer.
 
-**Architecture:** A pure generator lives in PixelogicKit (shared engine). It produces random grids and keeps only those that are *line-solvable* — propagation alone solving to completion mathematically guarantees a unique solution that needs no guessing, so generated puzzles uphold the app's core promise for free. The grader assigns difficulty (line-solvable puzzles fall in easy/medium/hard); badges are auto-detected. Persistence reuses the `StoredPuzzle` shape in a new `generatedPuzzles` collection on `PlayerStore`. iOS UI reuses `PlayView`/`PuzzleCard`/`BoardView`/`Theme`/`ShareCodec`. Watch + website are out of scope (separate surfaces; noted at the end).
+**Architecture:** A pure generator lives in ClueweaveKit (shared engine). It produces random grids and keeps only those that are *line-solvable* — propagation alone solving to completion mathematically guarantees a unique solution that needs no guessing, so generated puzzles uphold the app's core promise for free. The grader assigns difficulty (line-solvable puzzles fall in easy/medium/hard); badges are auto-detected. Persistence reuses the `StoredPuzzle` shape in a new `generatedPuzzles` collection on `PlayerStore`. iOS UI reuses `PlayView`/`PuzzleCard`/`BoardView`/`Theme`/`ShareCodec`. Watch + website are out of scope (separate surfaces; noted at the end).
 
-**Tech Stack:** Swift 6 / SwiftUI (iOS 16), SwiftPM (PixelogicKit), XcodeGen.
+**Tech Stack:** Swift 6 / SwiftUI (iOS 16), SwiftPM (ClueweaveKit), XcodeGen.
 
 **Grounding (measured):** random grids are line-solvable 58–77% of the time (n=5..10), so generation succeeds in ~1–2 attempts (~2 ms). Tiers that emerge: easy (mostly small), medium (all sizes), hard (mostly larger). Expert/MAX never emerge from line-solvable grids — that is expected and fine.
 
-**Out of scope (documented follow-ups):** generating on Apple Watch (small screen / no sync — the watch keeps playing the curated set); the website generator (separate repo `website-and-game-maker/pixelogic`). Both can adopt the same engine generator later.
+**Out of scope (documented follow-ups):** generating on Apple Watch (small screen / no sync — the watch keeps playing the curated set); the website generator (separate repo `website-and-game-maker/clueweave`). Both can adopt the same engine generator later.
 
 ---
 
 ## File Structure
 
-- **Create** `PixelogicKit/Sources/PixelogicKit/Generator.swift` — `generatePuzzle`, a seeded RNG for tests, the "worth submitting" rule, title/id helpers.
-- **Modify** `PixelogicKit/Sources/PixelogicKit/PlayerStore.swift` — add `generatedPuzzles` to `SaveData` (+ CodingKeys + tolerant decode), accessors, keep across reset, clear in-progress on delete.
-- **Modify** `PixelogicKit/Sources/pixelogic-verify/main.swift` — verifier checks for the generator + store.
-- **Modify** `PixelogicKit/Tests/PixelogicKitTests/EngineTests.swift` — Swift Testing mirrors.
+- **Create** `ClueweaveKit/Sources/ClueweaveKit/Generator.swift` — `generatePuzzle`, a seeded RNG for tests, the "worth submitting" rule, title/id helpers.
+- **Modify** `ClueweaveKit/Sources/ClueweaveKit/PlayerStore.swift` — add `generatedPuzzles` to `SaveData` (+ CodingKeys + tolerant decode), accessors, keep across reset, clear in-progress on delete.
+- **Modify** `ClueweaveKit/Sources/clueweave-verify/main.swift` — verifier checks for the generator + store.
+- **Modify** `ClueweaveKit/Tests/ClueweaveKitTests/EngineTests.swift` — Swift Testing mirrors.
 - **Modify** `Apps/iOS/Theme.swift` — add `Route.playGenerated(String)` and `Route.generator`.
-- **Modify** `Apps/iOS/PixelogicApp.swift` — `destination(for:)` arms; `AppModel` generated accessors + `anyPuzzle` lookup.
+- **Modify** `Apps/iOS/ClueweaveApp.swift` — `destination(for:)` arms; `AppModel` generated accessors + `anyPuzzle` lookup.
 - **Create** `Apps/iOS/GeneratorView.swift` — pick size → Generate → preview (board + difficulty + badges) → Save / Share / Send / Regenerate.
 - **Modify** `Apps/iOS/HomeView.swift` — a "Generate a puzzle" entry; a "Generated" section grouped by difficulty with badges + manage (delete).
 - **Modify** `Apps/iOS/PlayViewModel.swift` — persist in-progress for `g-` ids; share URL = token for generated.
@@ -32,9 +32,9 @@
 ## Task 1: Puzzle generator (engine, TDD)
 
 **Files:**
-- Create: `PixelogicKit/Sources/PixelogicKit/Generator.swift`
-- Test: `PixelogicKit/Tests/PixelogicKitTests/EngineTests.swift` (append a `GeneratorTests` suite)
-- Mirror: `PixelogicKit/Sources/pixelogic-verify/main.swift`
+- Create: `ClueweaveKit/Sources/ClueweaveKit/Generator.swift`
+- Test: `ClueweaveKit/Tests/ClueweaveKitTests/EngineTests.swift` (append a `GeneratorTests` suite)
+- Mirror: `ClueweaveKit/Sources/clueweave-verify/main.swift`
 
 - [ ] **Step 1 — Write the implementation.** A line-solvable grid has exactly one solution and needs no guessing, so filter on `isLineSolvable`. Inject the RNG so tests are deterministic.
 
@@ -166,7 +166,7 @@ var detRNG1 = SeededGenerator(seed: 5), detRNG2 = SeededGenerator(seed: 5)
 check(generatePuzzle(size: 8, using: &detRNG1)?.solution == generatePuzzle(size: 8, using: &detRNG2)?.solution, "seeded generation is deterministic")
 ```
 
-- [ ] **Step 4 — Run gates.** `cd PixelogicKit && swift run pixelogic-verify` → VERIFY OK; `swift test` → all pass.
+- [ ] **Step 4 — Run gates.** `cd ClueweaveKit && swift run clueweave-verify` → VERIFY OK; `swift test` → all pass.
 - [ ] **Step 5 — Commit.** `feat(kit): puzzle generator (line-solvable => unique + logic-solvable), seeded RNG, submit gate`
 
 ---
@@ -241,7 +241,7 @@ public func deleteGeneratedPuzzles(ids: Set<String>) {
 
 ## Task 3: iOS routing + AppModel wiring
 
-**Files:** Modify `Apps/iOS/Theme.swift`, `Apps/iOS/PixelogicApp.swift`.
+**Files:** Modify `Apps/iOS/Theme.swift`, `Apps/iOS/ClueweaveApp.swift`.
 
 - [ ] **Step 1 — Routes.** In `Theme.swift` `enum Route`, add:
 
@@ -250,7 +250,7 @@ case generator                 // the generate screen
 case playGenerated(String)     // a saved generated puzzle id
 ```
 
-- [ ] **Step 2 — AppModel.** In `PixelogicApp.swift`, add observable wrappers + extend lookup:
+- [ ] **Step 2 — AppModel.** In `ClueweaveApp.swift`, add observable wrappers + extend lookup:
 
 ```swift
 @discardableResult
@@ -264,7 +264,7 @@ In `anyPuzzle(withID:)` also check generated:
 
 ```swift
 func anyPuzzle(withID id: String) -> Puzzle? {
-    PixelogicKit.puzzle(withID: id)
+    ClueweaveKit.puzzle(withID: id)
         ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
         ?? store.generatedPuzzles.first(where: { $0.id == id })?.asPuzzle
 }
@@ -295,7 +295,7 @@ case .playGenerated(let id):
 private nonisolated static func make(size: Int) async -> Puzzle? { generatePuzzle(size: size) }
 ```
 
-Key state: `@State private var size = 8`, `@State private var puzzle: Puzzle?`, `@State private var working = false`. The Send mailto reuses `SuggestionMail`-style construction with the share URL in the body, subject "Pixelogic generated puzzle".
+Key state: `@State private var size = 8`, `@State private var puzzle: Puzzle?`, `@State private var working = false`. The Send mailto reuses `SuggestionMail`-style construction with the share URL in the body, subject "Clueweave generated puzzle".
 
 - [ ] **Step 2 — Build gate + commit.** `feat(ios): GeneratorView — generate, preview, save, share, send`
 
@@ -340,7 +340,7 @@ if vm.isLibrary || vm.puzzle.id.hasPrefix("u-") || vm.puzzle.id.hasPrefix("g-") 
 
 - [ ] **Step 1 — README:** document the generator (provably unique, logic-solvable, graded, badged; Generated library; share + send).
 - [ ] **Step 2 — Readiness:** note the generator keeps the "every puzzle solvable by logic, exactly one solution" guarantee, and that generated puzzles never carry the name-hint badge.
-- [ ] **Step 3 — Full gates:** `swift run pixelogic-verify` (CLT) → OK; `swift test` → pass; `xcodegen generate && xcodebuild build -scheme Pixelogic -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO` → BUILD SUCCEEDED.
+- [ ] **Step 3 — Full gates:** `swift run clueweave-verify` (CLT) → OK; `swift test` → pass; `xcodegen generate && xcodebuild build -scheme Clueweave -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO` → BUILD SUCCEEDED.
 - [ ] **Step 4 — Commit + merge to main + push.**
 
 ---

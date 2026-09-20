@@ -3,14 +3,18 @@
 // translation of the web app's play view.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 struct PlayView: View {
     @StateObject private var vm: PlayViewModel
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
+    @AppStorage("clueweave.ios.highVisibility") private var highVisibility = false
+    @State private var showSmartPrompt = false
+    @State private var smartTarget: Recommendation?
+    @State private var sheenOffset: CGFloat = -44
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(puzzle: Puzzle, isLibrary: Bool, store: PlayerStore) {
         _vm = StateObject(wrappedValue: PlayViewModel(puzzle: puzzle, isLibrary: isLibrary, store: store))
@@ -47,6 +51,12 @@ struct PlayView: View {
                 if let badge = vm.symmetricBadge {
                     symmetryStrip(badge)
                 }
+
+                // Level-to-level browsing lives at the very bottom, away from
+                // the solving tools.
+                if vm.isLibrary, curriculumPosition != nil {
+                    puzzleNav
+                }
             }
             .padding(.vertical)
         }
@@ -62,8 +72,14 @@ struct PlayView: View {
                         .accessibilityLabel("Elapsed time")
                 }
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if vm.isLibrary, curriculumPosition != nil { smartNextButton }
+            }
         }
         .sheet(isPresented: $vm.showWinSheet) { winSheet }
+        .sheet(isPresented: $showSmartPrompt) {
+            if let smartTarget { smartPromptSheet(smartTarget) }
+        }
         .onAppear { vm.setActive(true) }
         .onDisappear { vm.setActive(false); vm.persistNow() }
         .onChange(of: scenePhase) { phase in
@@ -84,32 +100,177 @@ struct PlayView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal)
-            if vm.isLibrary {
-                HStack {
-                    navArrow("chevron.left", label: "Previous puzzle", offset: -1)
-                    Spacer()
-                    navArrow("chevron.right", label: "Next puzzle", offset: 1)
-                }
-                .padding(.horizontal, 24)
-            }
         }
     }
 
-    private func navArrow(_ icon: String, label: String, offset: Int) -> some View {
-        Button {
-            guard let idx = library.firstIndex(where: { $0.id == vm.puzzle.id }) else { return }
-            let next = library[(idx + offset + library.count) % library.count]
-            app.replaceTop(with: .play(next.id))
-        } label: {
-            // 44×44 minimum hit target (Apple HIG); the visible circle now fills
-            // that target instead of relying on a 10pt pad around a 15pt glyph.
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .heavy))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Theme.surface))
-                .contentShape(Circle())
+    // MARK: - Navigation (docs/progression-model.md §6)
+    // Two deliberately different affordances: the bottom strip walks curriculum
+    // order — predictable, never wrapping, greyed at the ends, and it never
+    // consults or mutates the model; the sheened → in the toolbar asks the
+    // progression model what suits you.
+
+    private var curriculum: [Puzzle] { curriculumOrder(library) }
+    private var curriculumPosition: Int? { curriculumIndex(library, id: vm.puzzle.id) }
+
+    private var puzzleNav: some View {
+        HStack {
+            navArrow("chevron.left", label: "Previous puzzle", title: "Previous", offset: -1)
+            Spacer(minLength: 8)
+            if let pos = curriculumPosition {
+                Text("\(pos + 1) of \(curriculum.count) · \(vm.puzzle.difficulty.displayName)")
+                    .font(.system(.caption, design: .rounded, weight: .heavy))
+                    .foregroundStyle(Theme.inkSoft)
+            }
+            Spacer(minLength: 8)
+            navArrow("chevron.right", label: "Next puzzle", title: "Next", offset: 1)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.lineMajor).frame(height: 2).opacity(0.5)
+        }
+    }
+
+    private func navArrow(_ icon: String, label: String, title: String, offset: Int) -> some View {
+        let target = curriculumNeighbour(library, id: vm.puzzle.id, offset: offset)
+        return Button {
+            if let target { app.replaceTop(with: .play(target)) }
+        } label: {
+            HStack(spacing: 5) {
+                if offset < 0 { Image(systemName: icon) }
+                Text(title)
+                if offset > 0 { Image(systemName: icon) }
+            }
+            .font(.system(.subheadline, design: .rounded, weight: .heavy))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Theme.surface2)
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.lineMajor, lineWidth: 2))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        // Greyed, not hidden — the end of the run should be visible, not mysterious.
+        .disabled(target == nil)
+        .opacity(target == nil ? 0.38 : 1)
         .accessibilityLabel(label)
+    }
+
+    /// The smart-next arrow. Sheened while it is actually being smart; losing the
+    /// sheen is the visible signal that it has become an ordinary next button.
+    ///
+    /// The shine sweeps once when the view settles, not on a loop — a permanent
+    /// shimmer reads as a spinner and pulls the eye off the board for the whole
+    /// solve. Matches the web app's `.sheen-intro` behaviour.
+    private var smartNextButton: some View {
+        Button {
+            pressSmartNext()
+        } label: {
+            Image(systemName: "arrow.right")
+                .font(.system(size: 17, weight: .black))
+                .frame(width: 34, height: 34)
+                .foregroundStyle(smartOn ? .white : Theme.ink)
+                .background(
+                    Circle().fill(
+                        smartOn
+                            ? AnyShapeStyle(LinearGradient(
+                                colors: [Theme.primary, Theme.accent],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            : AnyShapeStyle(Theme.surface))
+                )
+                .overlay {
+                    if smartOn {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .clear, location: 0.35),
+                                        .init(color: .white.opacity(0.75), location: 0.5),
+                                        .init(color: .clear, location: 0.65),
+                                    ],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .offset(x: sheenOffset)
+                            .clipShape(Circle())
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay(
+                    Circle().strokeBorder(smartOn ? Color.clear : Theme.lineMajor, lineWidth: 1.5)
+                )
+                .shadow(color: smartOn ? Theme.primary.opacity(0.45) : .clear, radius: 6, y: 3)
+        }
+        .accessibilityLabel(smartOn ? "Recommended next puzzle" : "Next puzzle")
+        .onAppear(perform: playSheenOnce)
+    }
+
+    private func playSheenOnce() {
+        guard smartOn, !reduceMotion else { return }
+        sheenOffset = -44
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            withAnimation(.easeOut(duration: 1.05)) { sheenOffset = 44 }
+        }
+    }
+
+    private var smartOn: Bool { app.store.settings.progression.smartNext }
+
+    private func pressSmartNext() {
+        guard let target = smartNextTarget(
+            app.store.progression,
+            currentPuzzleID: vm.puzzle.id,
+            app.store.settings.progression,
+            library,
+            app.store.data.completed,
+            app.store.data.bestScores
+        ) else { return }
+        // Each press counts toward the spam guard; any finished attempt clears it.
+        app.noteSmartNextUse()
+        if shouldPromptSmartNext(app.store.progression, app.store.settings.progression) {
+            smartTarget = target
+            showSmartPrompt = true
+        } else {
+            app.replaceTop(with: .play(target.puzzleID))
+        }
+    }
+
+    /// On the first few uses, explain the pick and offer to turn the sheen off.
+    private func smartPromptSheet(_ target: Recommendation) -> some View {
+        let pick = library.first { $0.id == target.puzzleID }
+        return VStack(spacing: 14) {
+            Text("Picked for you")
+                .font(.system(.title2, design: .rounded, weight: .black))
+            HStack(spacing: 8) {
+                Text(pick?.title ?? "Next puzzle")
+                    .font(.system(.title3, design: .rounded, weight: .heavy))
+                DifficultyChip(difficulty: target.tier)
+            }
+            Text(target.reason)
+                .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                .foregroundStyle(Theme.primaryDeep)
+            Text("This arrow picks your next puzzle from how you're going — moving you up a level when you solve quickly, and easing off when you keep getting stuck. You can change this any time in Settings.")
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Theme.inkSoft)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            VStack(spacing: 10) {
+                Button("Keep choosing for me") { answerSmartPrompt(keepSmart: true, target: target) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.primaryDeep)
+                Button("Just go in order") { answerSmartPrompt(keepSmart: false, target: target) }
+            }
+            .font(.system(.subheadline, design: .rounded, weight: .heavy))
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+    }
+
+    private func answerSmartPrompt(keepSmart: Bool, target: Recommendation) {
+        if !keepSmart { app.setSmartNext(false) }
+        app.markSmartNextPrompted()
+        showSmartPrompt = false
+        app.replaceTop(with: .play(target.puzzleID))
     }
 
     private var controls: some View {
@@ -179,9 +340,22 @@ struct PlayView: View {
                 }
             }
             if vm.isLibrary {
+                // Follows the progression model, so a string of solves walks
+                // forward through the curriculum instead of looping back to an
+                // Easy the way raw library order used to.
                 Button {
-                    guard let idx = library.firstIndex(where: { $0.id == vm.puzzle.id }) else { return }
-                    app.replaceTop(with: .play(library[(idx + 1) % library.count].id))
+                    if let target = smartNextTarget(
+                        app.store.progression,
+                        currentPuzzleID: vm.puzzle.id,
+                        app.store.settings.progression,
+                        library,
+                        app.store.data.completed,
+                        app.store.data.bestScores
+                    ) {
+                        app.replaceTop(with: .play(target.puzzleID))
+                    } else {
+                        dismiss()
+                    }
                 } label: {
                     Label("Next puzzle", systemImage: "arrow.right")
                 }

@@ -10,7 +10,7 @@
 //    but unmissable "too many here" signal, distinct from the red mistake cue.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 struct BoardView: View {
     let puzzle: Puzzle

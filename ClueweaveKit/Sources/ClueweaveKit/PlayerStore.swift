@@ -24,7 +24,27 @@ public struct GameSettings: Codable, Sendable, Equatable {
     public var showTimer = true
     public var clueStyle: ClueStyle = .grey
     public var autoCross = false
+    /// How the game picks your next puzzle. See docs/progression-model.md §4.
+    public var progression = ProgressionSettings()
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case mistakeCheck, showTimer, clueStyle, autoCross, progression
+    }
+
+    /// Tolerant field-by-field decode so a save from any app version — older
+    /// (no progression block) or newer — loads without losing the rest.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func field<T: Decodable>(_ type: T.Type, _ key: CodingKeys, _ fallback: T) -> T {
+            (try? c.decodeIfPresent(T.self, forKey: key)).flatMap { $0 } ?? fallback
+        }
+        mistakeCheck = field(Bool.self, .mistakeCheck, false)
+        showTimer = field(Bool.self, .showTimer, true)
+        clueStyle = field(ClueStyle.self, .clueStyle, .grey)
+        autoCross = field(Bool.self, .autoCross, false)
+        progression = field(ProgressionSettings.self, .progression, ProgressionSettings())
+    }
 }
 
 /// A player-created puzzle (kept across progress resets, like the web app).
@@ -92,11 +112,13 @@ public struct SaveData: Codable, Sendable {
     public var progressReset = false
     /// Unfinished attempts, per puzzle id (board + clock + assists).
     public var inProgress: [String: InProgressAttempt] = [:]
+    /// Working tier + boredom/struggle streaks. See docs/progression-model.md.
+    public var progression = ProgressionState()
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case completed, bestTimes, bestScores, assists, userPuzzles, generatedPuzzles,
-             settings, tutorialSeen, tourSeen, progressReset, inProgress
+             settings, tutorialSeen, tourSeen, progressReset, inProgress, progression
     }
 
     /// Every field decodes independently with a default, so a save written by
@@ -128,6 +150,7 @@ public struct SaveData: Codable, Sendable {
         tourSeen = field(Bool.self, .tourSeen, false)
         progressReset = field(Bool.self, .progressReset, false)
         inProgress = field([String: InProgressAttempt].self, .inProgress, [:])
+        progression = field(ProgressionState.self, .progression, ProgressionState())
     }
 }
 
@@ -135,14 +158,28 @@ public struct SaveData: Codable, Sendable {
 /// mutation is funneled through the main actor in the apps; the store itself is
 /// a value-semantics wrapper over UserDefaults.
 public final class PlayerStore: @unchecked Sendable {
-    public static let storageKey = "pixelogic.save.v1"
+    public static let storageKey = "clueweave.save.v1"
+
+    /// The pre-rebrand key. Read once, on first launch under the new name, so a
+    /// player who saved under the old brand keeps their progress. Never written to.
+    static let legacyStorageKey = "pixelogic.save.v1"
 
     private let defaults: UserDefaults
     private var cache: SaveData
 
+    /// The save blob, preferring the current key and adopting a legacy one if that
+    /// is all there is. Adoption copies it across so the old key stops mattering.
+    private static func readRaw(_ defaults: UserDefaults) -> Data? {
+        if let current = defaults.data(forKey: storageKey) { return current }
+        guard let legacy = defaults.data(forKey: legacyStorageKey) else { return nil }
+        defaults.set(legacy, forKey: storageKey)
+        defaults.removeObject(forKey: legacyStorageKey)
+        return legacy
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let raw = defaults.data(forKey: Self.storageKey) {
+        if let raw = Self.readRaw(defaults) {
             if let decoded = try? JSONDecoder().decode(SaveData.self, from: raw) {
                 cache = decoded
             } else {
@@ -324,10 +361,10 @@ public final class PlayerStore: @unchecked Sendable {
         data = d
     }
 
-    // MARK: - Pixelogic Score
+    // MARK: - Clueweave Score
 
-    public var pixelogicScore: Int {
-        PixelogicKit.pixelogicScore(
+    public var clueweaveScore: Int {
+        ClueweaveKit.clueweaveScore(
             bestScores: data.bestScores,
             library: library.map {
                 PuzzleMeta(
@@ -342,7 +379,7 @@ public final class PlayerStore: @unchecked Sendable {
     public var wasProgressReset: Bool { data.progressReset }
 
     /// Danger zone: wipe solved/in-progress state and records. Keeps settings.
-    /// Sets a permanent flag so a shared Pixelogic Score can disclose the reset.
+    /// Sets a permanent flag so a shared Clueweave Score can disclose the reset.
     public func resetProgress() {
         var d = data
         d.completed = []
@@ -351,6 +388,39 @@ public final class PlayerStore: @unchecked Sendable {
         d.assists = [:]
         d.inProgress = [:]
         d.progressReset = true
+        // Progression state IS progress — the working tier and streaks go back
+        // to defaults. Settings (including the progression tunables) survive,
+        // as do userPuzzles and generatedPuzzles.
+        d.progression = ProgressionState()
+        data = d
+    }
+
+    // MARK: - Progression
+
+    public var progression: ProgressionState {
+        get { data.progression }
+        set { data.progression = newValue }
+    }
+
+    /// Fold a finished attempt's signal into the progression state.
+    public func recordSignal(_ signal: Signal, library: [Puzzle]) {
+        var d = data
+        d.progression = applySignal(
+            signal, d.progression, d.settings.progression, library, d.completed)
+        data = d
+    }
+
+    /// Note a smart-next press: counts toward the spam guard and the first-use prompt.
+    public func noteSmartNextUse() {
+        var d = data
+        d.progression.smartNextUses += 1
+        d.progression.spamCount += 1
+        data = d
+    }
+
+    public func markSmartNextPrompted() {
+        var d = data
+        d.progression.smartNextPrompted = true
         data = d
     }
 }

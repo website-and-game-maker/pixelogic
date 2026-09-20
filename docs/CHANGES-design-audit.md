@@ -1,6 +1,6 @@
-# Pixelogic — design-audit changes
+# Clueweave — design-audit changes
 
-This document records the changes made to `pixelogic-apple` in response to the
+This document records the changes made to `clueweave-apple` in response to the
 design/standards audit. Everything here is iOS/watchOS Swift source plus a few
 generated image assets — none of it could be compiled on the authoring machine,
 so **give it a build pass in Xcode** before shipping. Where a number is
@@ -14,7 +14,7 @@ referenced (e.g. “#3”) it maps to the audit item.
 ## 1. Dark Mode (#2)
 
 The app previously forced light mode (`.preferredColorScheme(.light)` in
-`PixelogicApp.swift`), which the comment justified as keeping system surfaces
+`ClueweaveApp.swift`), which the comment justified as keeping system surfaces
 (Form, sheets) coherent with the hand-tuned baby-blue palette.
 
 **What changed**
@@ -29,7 +29,7 @@ The app previously forced light mode (`.preferredColorScheme(.light)` in
     paired with adaptive text colors.
 - `Theme.symmetryInk` was added so the play-screen symmetry strip’s text (which
   used a hard-coded hex) adapts instead of going low-contrast on dark.
-- `PixelogicApp.swift` — removed `.preferredColorScheme(.light)`; the app now
+- `ClueweaveApp.swift` — removed `.preferredColorScheme(.light)`; the app now
   follows the system appearance.
 - `CreateViews.swift` — the editor verdict colors (unique green / not-unique
   amber) are now `Color(lightHex:darkHex:)` so they read on the dark canvas.
@@ -69,7 +69,7 @@ Previously the in-app “Privacy policy” link pointed at a web *About* anchor
 - `SecondaryViews.swift` — new self-contained **`PrivacyView`** (a real policy:
   what’s collected = nothing, where data lives, sharing, children, contact,
   “Last updated”). It resolves offline and never depends on a web URL.
-- `Theme.swift` — added `Route.privacy`; `PixelogicApp.swift` routes it.
+- `Theme.swift` — added `Route.privacy`; `ClueweaveApp.swift` routes it.
 - Reachable from three places:
   - **Home footer** — a small, understated, website-style `Privacy Policy` link
     (plain system text, underlined, muted) at the very bottom. The redundant
@@ -78,7 +78,7 @@ Previously the in-app “Privacy policy” link pointed at a web *About* anchor
     instead of the web link.
   - **About → “Your privacy”** card — links into the dedicated page.
 
-> The matching **web** dedicated privacy page is still pending — the `pixelogic`
+> The matching **web** dedicated privacy page is still pending — the `clueweave`
 > web folder detached mid-session, so `router.ts` / `menu.ts` couldn’t be read.
 
 ## 5. Watch board uses the brand palette (#7)
@@ -110,7 +110,7 @@ Two aids, both in `BoardView.swift`:
   - crosses are solid **black** and thicker (3 pt),
   - grid lines darken (minor → `lineMajor`, major → `ink @ 55%`),
   - unmet clue numbers render **black**.
-  - Stored under `@AppStorage("pixelogic.ios.highVisibility")`. Read by
+  - Stored under `@AppStorage("clueweave.ios.highVisibility")`. Read by
     `PlayView`, `TutorialView`, and `ExplainerView`, passed into `BoardView`.
 - **Over-fill warning** (always on, low-noise) — if a row or column holds **more
   filled cells than its clue total allows**, that line’s clue numbers turn
@@ -133,29 +133,30 @@ menu** (haptic + blurred card preview).
   **Play**, then Edit (customs) / Share (generated), then a destructive
   **Delete**. The multi-select **Manage** mode is kept for bulk deletes.
 
-## 9. Score laurel as a high-res image, tiered by score (#13 + new request)
+## 9. Score laurel, tiered by score (#13 + new request)
 
-The score laurel was a `Text("🌿")` glyph. It’s now a rendered image **and** it
-levels up with the Pixelogic Score.
+The score laurel was a `Text("🌿")` glyph. It levels up with the Clueweave Score.
 
-- Assets (rendered from the Apple emoji at high resolution, trimmed, single
-  universal PNG per imageset) under `Apps/iOS/Assets.xcassets/`:
-  - `Laurel.imageset` — **Beginner**: the humble single green sprig.
-  - `LaurelGreen.imageset` — fuller two-leaf green branch.
-  - `LaurelBronze.imageset` — three leaves, bronze.
-  - `LaurelSilver.imageset` — three leaves, silver.
-  - `LaurelGold.imageset` — **Pro**: a full four-leaf **golden** wreath, tallest
-    (wraps furthest around the score).
-- `HomeView.swift` — `laurelTier(for: score)` selects the asset + flank height;
-  both mirrored laurels use it. Thresholds (easy to tune):
+> **Superseded by the licensing pass.** This was briefly five PNG imagesets
+> rasterized from the Apple emoji font. That art could not ship: Apple's font
+> license does not permit redistributing the emoji artwork as bitmaps inside an
+> app bundle, and it is a known App Store rejection. The imagesets
+> (`Laurel{,Green,Bronze,Silver,Gold}.imageset`) have been **deleted**.
 
-  | Score | Laurel | Height |
-  |------:|--------|-------:|
-  | 0–29 | `Laurel` (green sprig) | 30 |
-  | 30–119 | `LaurelGreen` | 42 |
-  | 120–349 | `LaurelBronze` | 50 |
-  | 350–799 | `LaurelSilver` | 58 |
-  | 800–1600 | `LaurelGold` | 68 |
+- The laurel is now the **SF Symbol** `laurel.leading` / `laurel.trailing` —
+  shipped by the OS and licensed for in-app use — tinted and sized per tier.
+  No bitmap ships, and the mirrored pair no longer needs `scaleEffect(x: -1)`.
+- `HomeView.swift` — `laurelTier(for: score)` returns a `(tint, height)` pair.
+  Tints come from `Theme`; `Theme.bronze` / `Theme.silver` were added because
+  those tiers used to be encoded in the artwork itself. Thresholds unchanged:
+
+  | Score | Tint | Height |
+  |------:|------|-------:|
+  | 0–29 | `Theme.primary` | 30 |
+  | 30–119 | `Theme.primaryDeep` | 42 |
+  | 120–349 | `Theme.bronze` | 50 |
+  | 350–799 | `Theme.silver` | 58 |
+  | 800–1600 | `Theme.gold` | 68 |
 
   The first upgrade at **30** arrives after only a little play, so the change is
   visible soon. (The laurel tier is independent of the `scoreTitle` word shown
@@ -169,11 +170,11 @@ levels up with the Pixelogic Score.
 Apps/iOS/Theme.swift            adaptive colors, symmetryInk, overfill,
                                 maxChipGradient, gradient DifficultyChip,
                                 Route.privacy
-Apps/iOS/PixelogicApp.swift     removed forced light mode; Route.privacy dest
+Apps/iOS/ClueweaveApp.swift     removed forced light mode; Route.privacy dest
 Apps/iOS/PlayView.swift         44pt nav arrows; symmetry text token;
                                 high-visibility passthrough
 Apps/iOS/BoardView.swift        high-visibility mode; over-fill clue warning
-Apps/iOS/HomeView.swift         tiered laurel images; native Play/Edit/Delete
+Apps/iOS/HomeView.swift         tiered laurel symbol; native Play/Edit/Delete
                                 context menus; understated privacy footer link
 Apps/iOS/SecondaryViews.swift   PrivacyView; email + AI/manager copy;
                                 Accessibility toggle; Settings privacy link;
@@ -182,18 +183,19 @@ Apps/iOS/CreateViews.swift      dark-mode verdict colors; tutorial copy;
                                 tutorial high-visibility passthrough
 Apps/Watch/WatchPalette.swift   Color(hex:) + brand board tokens
 Apps/Watch/WatchPlayView.swift  board uses brand palette
-Apps/iOS/Assets.xcassets/Laurel{,,Green,Bronze,Silver,Gold}.imageset/
+Apps/iOS/Assets.xcassets/  (laurel imagesets removed — SF Symbol instead)
 ```
 
 ## New persistence keys
 
-- `pixelogic.ios.highVisibility` (`@AppStorage`, default `false`).
+- `clueweave.ios.highVisibility` (`@AppStorage`, default `false`).
 
 ## Still open / handoff
 
-- **Web dedicated privacy page (#5, web side)** — needs the `pixelogic` web
+- **Web dedicated privacy page (#5, web side)** — needs the `clueweave` web
   folder reattached to read `router.ts` / `menu.ts` and wire a `#/privacy` view
   + footer link to match the phone.
 - **Build pass** — compile in Xcode; run the iPhone/iPad/Watch schemes.
-- The laurel art is rasterized from the system emoji; if you prefer vector or a
-  bespoke wreath, the assets can be swapped without code changes (same names).
+- The laurel is now the SF Symbol `laurel.leading`/`laurel.trailing`, tinted per
+  tier (see §9). If you want a bespoke wreath, swap the `Image(systemName:)`
+  calls in `HomeView.swift` — but do **not** reintroduce rasterized emoji art.

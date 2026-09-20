@@ -5,7 +5,7 @@
 // a watch-local AppStorage flag (see WatchHomeView).
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 #if canImport(WatchKit)
 import WatchKit
@@ -16,7 +16,7 @@ struct WatchTutorialView: View {
     /// Called when the lesson finishes from the auto-shown first-launch sheet.
     var onFinish: (() -> Void)? = nil
 
-    private let puzzle = PixelogicKit.puzzle(withID: "plus")!
+    private let puzzle = ClueweaveKit.puzzle(withID: "plus")!
     @State private var session: GameSession
     @State private var marks: Grid
     @State private var stepIndex = 0
@@ -46,7 +46,7 @@ struct WatchTutorialView: View {
 
     init(onFinish: (() -> Void)? = nil) {
         self.onFinish = onFinish
-        let p = PixelogicKit.puzzle(withID: "plus")!
+        let p = ClueweaveKit.puzzle(withID: "plus")!
         let s = GameSession(puzzle: p)
         _session = State(initialValue: s)
         _marks = State(initialValue: s.marks)

@@ -1,21 +1,23 @@
-// Pixelogic for Apple Watch — the "pocket set": small puzzles rethought for
+// Clueweave for Apple Watch — the "pocket set": small puzzles rethought for
 // 5-second wrist sessions. See DESIGN.md for the rationale. The app keeps its
 // clean board + scrolling list, and now adds difficulty sections, non-clickable
 // badge indicators, a legend, a wrist-sized Tutorial / About / Settings, and a
-// scene-aware play timer driven by PixelogicKit's GameSession.
+// scene-aware play timer driven by ClueweaveKit's GameSession.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 #if canImport(WatchKit)
 import WatchKit
 #endif
 
 // Disambiguate from SwiftUI.Grid (a layout view) across this target.
-typealias Grid = PixelogicKit.Grid
+typealias Grid = ClueweaveKit.Grid
 
 @main
-struct PixelogicWatchApp: App {
+struct ClueweaveWatchApp: App {
+    init() { migrateLegacyBrandKeys() }
+
     var body: some Scene {
         WindowGroup {
             NavigationStack {
@@ -25,10 +27,25 @@ struct PixelogicWatchApp: App {
     }
 }
 
+/// The watch keeps its state in wrist-local `@AppStorage`, whose keys carry the
+/// app name. The rebrand renamed them, which would silently orphan a player's
+/// solved list, so adopt anything still sitting under the old prefix once.
+private func migrateLegacyBrandKeys() {
+    let defaults = UserDefaults.standard
+    for suffix in ["completed", "tourSeen", "showTimer", "haptics"] {
+        let old = "pixelogic.watch.\(suffix)"
+        let new = "clueweave.watch.\(suffix)"
+        guard defaults.object(forKey: new) == nil,
+              let value = defaults.object(forKey: old) else { continue }
+        defaults.set(value, forKey: new)
+        defaults.removeObject(forKey: old)
+    }
+}
+
 /// Minimal wrist-local progress (completion only — no scores on the wrist).
 @MainActor
 final class WatchProgress: ObservableObject {
-    @AppStorage("pixelogic.watch.completed") private var completedRaw = ""
+    @AppStorage("clueweave.watch.completed") private var completedRaw = ""
 
     var completed: Set<String> {
         Set(completedRaw.split(separator: ",").map(String.init))
@@ -73,11 +90,41 @@ let watchSections: [(tier: Difficulty, puzzles: [Puzzle])] = Difficulty.ordered.
 
 struct WatchHomeView: View {
     @StateObject private var progress = WatchProgress()
-    @AppStorage("pixelogic.watch.tourSeen") private var tourSeen = false
+    @AppStorage("clueweave.watch.tourSeen") private var tourSeen = false
     @State private var showTutorial = false
+
+    /// The same `recommend()` the phone and web use, over watch-local completion
+    /// data. The wrist deliberately does NOT run the state machine — no streaks
+    /// here, so the working tier stays at its default. See
+    /// docs/progression-model.md §9.
+    private var recommendation: Recommendation? {
+        recommend(ProgressionState(), watchLibrary, progress.completed, [:])
+    }
 
     var body: some View {
         List {
+            if let rec = recommendation,
+               let pick = watchLibrary.first(where: { $0.id == rec.puzzleID }) {
+                Section {
+                    NavigationLink {
+                        WatchPlayView(puzzle: pick, progress: progress)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(pick.title)
+                                .font(.system(.body, design: .rounded, weight: .heavy))
+                            Text(rec.reason)
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "target")
+                        Text("Recommended")
+                    }
+                }
+            }
             ForEach(watchSections, id: \.tier) { section in
                 Section {
                     ForEach(section.puzzles) { p in
@@ -97,7 +144,7 @@ struct WatchHomeView: View {
                 }
             }
         }
-        .navigationTitle("Pixelogic")
+        .navigationTitle("Clueweave")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 NavigationLink {

@@ -1,11 +1,11 @@
 // The play screen: the same compact board + one giant mode toggle, now with a
-// scene-aware elapsed timer driven by PixelogicKit's GameSession. The session is
+// scene-aware elapsed timer driven by ClueweaveKit's GameSession. The session is
 // paused whenever the app leaves .active (Control Center, notifications, wrist
 // down, app switch) and resumed when it returns, so ambient time off-screen
 // never inflates the solve time shown on the win view.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 #if canImport(WatchKit)
 import WatchKit
@@ -17,8 +17,8 @@ struct WatchPlayView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
-    @AppStorage("pixelogic.watch.showTimer") private var showTimer = true
-    @AppStorage("pixelogic.watch.haptics") private var haptics = true
+    @AppStorage("clueweave.watch.showTimer") private var showTimer = true
+    @AppStorage("clueweave.watch.haptics") private var haptics = true
 
     @State private var session: GameSession
     @State private var marks: Grid

@@ -68,16 +68,16 @@ public func decodePuzzle(_ token: String) throws -> (solution: [[Bool]], title: 
 
 /// The canonical web URL that opens this puzzle anywhere.
 public func webShareURL(forToken token: String) -> URL {
-    URL(string: "https://website-and-game-maker.github.io/pixelogic/#/p/\(token)")!
+    URL(string: "https://website-and-game-maker.github.io/clueweave/#/p/\(token)")!
 }
 
 public func webShareURL(forLibraryID id: String) -> URL {
-    URL(string: "https://website-and-game-maker.github.io/pixelogic/#/play/\(id)")!
+    URL(string: "https://website-and-game-maker.github.io/clueweave/#/play/\(id)")!
 }
 
 /// Extract a share token from whatever the user pasted or tapped: a bare
-/// token, a `pixelogic://p/<token>` link, or the canonical web URL
-/// (`…/pixelogic/#/p/<token>`). Returns nil when nothing token-shaped is found.
+/// token, a `clueweave://p/<token>` link, or the canonical web URL
+/// (`…/clueweave/#/p/<token>`). Returns nil when nothing token-shaped is found.
 public func shareToken(fromUserInput input: String) -> String? {
     let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import PixelogicKit
+@testable import ClueweaveKit
 
 private func grid(_ rows: [String]) -> [[Bool]] {
     bitmapToGrid(rows)
@@ -117,11 +117,24 @@ private func grid(_ rows: [String]) -> [[Bool]] {
 // MARK: - Grader
 
 @Suite struct GraderTests {
-    @Test func symmetricContradictionCapsAtHard() {
+    @Test func smallSymmetricContradictionPictureIsEasy() {
+        // Playtested ground truth: Letter A is easy. 25 cells you can hold in
+        // your head, and a mirror axis that hands you half of it. A flat
+        // per-contradiction weight plus an easy ceiling that sat below every 5×5
+        // used to ship it as Hard.
         let letterA = grid([".###.", "#...#", "#####", "#...#", "#...#"])
         let clues = cluesForGrid(letterA)
         #expect(!isLineSolvable(clues.rowClues, clues.colClues))
-        #expect(gradeGrid(letterA) == .hard)
+        #expect(gradeGrid(letterA) == .easy)
+    }
+
+    @Test func irregularTenByTenIsHard() {
+        // The other half of the same playtest: Cat is hard. Asymmetric and
+        // unpatterned, so nothing discounts it, and 100 cells of real deduction
+        // is more work than any 5×5 — which sweep-counting used to miss.
+        let cat = puzzle(withID: "cat")!
+        #expect(!isSymmetric(cat.solution))
+        #expect(gradeGrid(cat.solution) == .hard)
     }
 
     @Test func patternedCapsAtMedium() {
@@ -161,22 +174,22 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(puzzleScore(difficulty: .easy, area: 25, bestTimeMs: par, assists: voided) == 0)
     }
 
-    @Test func pixelogicScoreWeighting() {
+    @Test func clueweaveScoreWeighting() {
         let lib = [
             PuzzleMeta(id: "e", difficulty: .easy),
             PuzzleMeta(id: "x", difficulty: .expert),
         ]
-        #expect(pixelogicScore(bestScores: [:], library: lib) == 0)
-        #expect(pixelogicScore(bestScores: ["e": 100, "x": 100], library: lib) == 1600)
-        #expect(pixelogicScore(bestScores: ["e": 100], library: lib) == 200)
-        #expect(pixelogicScore(bestScores: ["x": 100], library: lib) == 1400)
+        #expect(clueweaveScore(bestScores: [:], library: lib) == 0)
+        #expect(clueweaveScore(bestScores: ["e": 100, "x": 100], library: lib) == 1600)
+        #expect(clueweaveScore(bestScores: ["e": 100], library: lib) == 200)
+        #expect(clueweaveScore(bestScores: ["x": 100], library: lib) == 1400)
         // Badge multipliers shift shares without breaking the ceiling.
         let badged = [
             PuzzleMeta(id: "e", difficulty: .easy, weightMult: 0.5),
             PuzzleMeta(id: "x", difficulty: .expert),
         ]
-        #expect(pixelogicScore(bestScores: ["e": 100, "x": 100], library: badged) == 1600)
-        #expect(pixelogicScore(bestScores: ["e": 100], library: badged) == Int((1600 * 0.5 / 7.5).rounded()))
+        #expect(clueweaveScore(bestScores: ["e": 100, "x": 100], library: badged) == 1600)
+        #expect(clueweaveScore(bestScores: ["e": 100], library: badged) == Int((1600 * 0.5 / 7.5).rounded()))
     }
 
     @Test func titlesAndBudgets() {
@@ -227,14 +240,14 @@ private func grid(_ rows: [String]) -> [[Bool]] {
         #expect(store.bestScore(for: "smiley") == nil)
         #expect(store.wasProgressReset)
         #expect(store.settings.mistakeCheck) // kept
-        #expect(store.pixelogicScore == 0)
+        #expect(store.clueweaveScore == 0)
     }
 
-    @Test func pixelogicScoreRisesWithSolves() {
+    @Test func clueweaveScoreRisesWithSolves() {
         let store = freshStore()
-        #expect(store.pixelogicScore == 0)
+        #expect(store.clueweaveScore == 0)
         store.recordScore("plus", score: 100)
-        #expect(store.pixelogicScore > 0)
+        #expect(store.clueweaveScore > 0)
     }
 }
 
@@ -258,9 +271,9 @@ private func grid(_ rows: [String]) -> [[Bool]] {
     @Test func everyAcceptedForm() {
         let token = encodePuzzle(art, title: "Tiny")
         #expect(shareToken(fromUserInput: token) == token)
-        #expect(shareToken(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/p/\(token)") == token)
-        #expect(shareToken(fromUserInput: "pixelogic://p/\(token)") == token)
-        #expect(shareToken(fromUserInput: "  pixelogic://p/\(token)\n") == token)
+        #expect(shareToken(fromUserInput: "https://website-and-game-maker.github.io/clueweave/#/p/\(token)") == token)
+        #expect(shareToken(fromUserInput: "clueweave://p/\(token)") == token)
+        #expect(shareToken(fromUserInput: "  clueweave://p/\(token)\n") == token)
     }
 
     @Test func junkRejected() {
@@ -372,12 +385,12 @@ private func grid(_ rows: [String]) -> [[Bool]] {
 
 @Suite struct LibraryLinkTests {
     @Test func parsesLibraryLinks() {
-        #expect(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/play/plus") == "plus")
+        #expect(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/clueweave/#/play/plus") == "plus")
         #expect(libraryShareID(fromUserInput: "  #/play/heart\n") == "heart")
         #expect(libraryShareID(fromUserInput: webShareURL(forLibraryID: "smiley").absoluteString) == "smiley")
     }
     @Test func rejectsNonLibrary() {
-        #expect(libraryShareID(fromUserInput: "pixelogic://p/abc123") == nil)
+        #expect(libraryShareID(fromUserInput: "clueweave://p/abc123") == nil)
         #expect(libraryShareID(fromUserInput: "nonsense") == nil)
     }
 }

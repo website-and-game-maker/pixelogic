@@ -1,7 +1,7 @@
 // Settings, About, badge filter, the dedicated Privacy page, and watch-solve.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 // MARK: - Settings
 
@@ -9,7 +9,7 @@ struct SettingsView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
-    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
+    @AppStorage("clueweave.ios.highVisibility") private var highVisibility = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +21,29 @@ struct SettingsView: View {
                     Picker("Completed clues", selection: binding(\.clueStyle)) {
                         ForEach(ClueStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
+                }
+                Section {
+                    Toggle("Smart next puzzle", isOn: progressionBinding(\.smartNext))
+                    Toggle("Auto-adjust difficulty", isOn: progressionBinding(\.autoAdjustDifficulty))
+                    Picker("Move me up when", selection: progressionBinding(\.fastSensitivity)) {
+                        ForEach(FastSensitivity.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    Picker("Move me down when", selection: progressionBinding(\.struggleSensitivity)) {
+                        ForEach(StruggleSensitivity.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    Toggle("Count heavy hints as struggling", isOn: progressionBinding(\.hintsCountAsStruggle))
+                    HStack {
+                        Text("Your level")
+                        Spacer()
+                        Text(app.store.progression.workingTier.displayName)
+                            .foregroundStyle(Theme.inkSoft)
+                        Button("Reset") { app.resetProgressionState() }
+                            .buttonStyle(.bordered)
+                    }
+                } header: {
+                    Text("Picking your next puzzle")
+                } footer: {
+                    Text("The → button at the top right can choose for you, watching whether you're breezing through or getting stuck. Turn Smart next off to make it a plain next-in-order arrow.")
                 }
                 Section {
                     Toggle("High-visibility board", isOn: $highVisibility)
@@ -46,7 +69,7 @@ struct SettingsView: View {
                     } label: {
                         Label("Privacy policy", systemImage: "hand.raised")
                     }
-                    Text("Pixelogic collects nothing. Your progress, scores and creations stay on this device.")
+                    Text("Clueweave collects nothing. Your progress, scores and creations stay on this device.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -55,7 +78,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Danger zone")
                 } footer: {
-                    Text("Clears solved puzzles, scores and best times. Your custom puzzles are kept, and a shared Pixelogic Score will disclose the reset.")
+                    Text("Clears solved puzzles, scores and best times. Your custom puzzles are kept, and a shared Clueweave Score will disclose the reset.")
                 }
             }
             .navigationTitle("Settings")
@@ -83,6 +106,15 @@ struct SettingsView: View {
             }
         )
     }
+
+    private func progressionBinding<T>(_ keyPath: WritableKeyPath<ProgressionSettings, T>) -> Binding<T> {
+        Binding(
+            get: { app.store.settings.progression[keyPath: keyPath] },
+            set: { newValue in
+                app.updateProgressionSettings { $0[keyPath: keyPath] = newValue }
+            }
+        )
+    }
 }
 
 // MARK: - Suggestion mail
@@ -94,7 +126,7 @@ enum SuggestionMail {
     static let address = "pats-sire-06@icloud.com"
 
     /// A mailto: URL with an optional subject and body, both percent-encoded.
-    static func url(subject: String = "Pixelogic suggestion", body: String? = nil) -> URL {
+    static func url(subject: String = "Clueweave suggestion", body: String? = nil) -> URL {
         var comps = URLComponents()
         comps.scheme = "mailto"
         comps.path = address
@@ -124,8 +156,8 @@ struct BadgeListView: View {
                     .font(.system(.subheadline, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.ink)
                 Text(key.multiplier < 1
-                     ? "Because they're a little easier, \(key.name) puzzles count slightly less toward your Pixelogic Score."
-                     : "Because they're harder, \(key.name) puzzles count for more in your Pixelogic Score.")
+                     ? "Because they're a little easier, \(key.name) puzzles count slightly less toward your Clueweave Score."
+                     : "Because they're harder, \(key.name) puzzles count for more in your Clueweave Score.")
                     .font(.system(.footnote, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.inkSoft)
                 ForEach(Difficulty.ordered, id: \.self) { tier in
@@ -169,22 +201,26 @@ struct AboutView: View {
     }
 
     private let sections: [Section] = [
-        Section(icon: "square.grid.3x3.fill", title: "What is Pixelogic?",
-                body: "Pixelogic is a nonogram (picross) game: the numbers along each row and column describe the runs of filled cells in that line, and from those clues alone you can reconstruct a hidden pixel picture. Our promise is simple: every puzzle can be finished with certain logic — never a guess."),
+        Section(icon: "square.grid.3x3.fill", title: "What is Clueweave?",
+                body: "Clueweave is a nonogram (picross) game: the numbers along each row and column describe the runs of filled cells in that line, and from those clues alone you can reconstruct a hidden pixel picture. Our promise is simple: every puzzle can be finished with certain logic — never a guess."),
         Section(icon: "brain.head.profile", title: "How do we know a puzzle never needs guessing?",
                 body: "Before a puzzle ships, the game plays it against itself — with a twist: the built-in solver is only allowed moves a careful human could make. It examines one line at a time and asks: across every possible way this clue could fit, which cells come out the same? Those cells are forced, and it marks them and repeats. Separately, a second check tries to find two different pictures matching the same clues; if it can, the puzzle is rejected. Hints replay this same chain of forced moves — that's why a hint can always tell you why a cell is certain."),
         Section(icon: "thermometer.medium", title: "How is difficulty decided?",
                 body: "Not by size! Difficulty measures how hard the solver has to think. If single-line reasoning cracks the puzzle in a sweep or two, it's Easy; more sweeps feeding into each other make Medium and Hard. Some puzzles stall every line — the only way forward is a what-if: assume a cell, watch the assumption collapse into contradiction, and conclude the opposite. Those are Extra Hard, and the ones demanding it over and over across long lines are MAX. Symmetric, patterned, or tell-tale-named pictures confess their secrets early, so the grader caps or discounts them."),
-        Section(icon: "laurel.leading", title: "The Pixelogic Score",
-                body: "Your Pixelogic Score (0–1,600) measures mastery of the whole library. Each puzzle contributes its best result, weighted by tier — a MAX puzzle moves your score about a dozen Easies' worth. Per puzzle you score out of 100: solve at par or faster with no help for a perfect score; assists subtract by how much they reveal, and auto-completing scores zero. If you ever reset your progress, your shared score says so."),
+        Section(icon: "rhombus.fill", title: "What the chips on a puzzle mean",
+                body: "Every puzzle wears a difficulty chip and, sometimes, badges — self-descriptions of how it will feel to solve. ◈ Symmetric: the picture mirrors itself, so a deduction on one side gives you the other free. 🏷 Name-hint: the title tells you what you're drawing. ▤ Patterned: every row and column is one solid run.\n\nThe Symmetric badge always carries a letter for which way the picture mirrors — that's the H in “◈ Symmetric · H”:\n\n"
+                    + symmetryLegend.map { "\($0.code) — \($0.meaning)" }.joined(separator: "\n\n")
+                    + "\n\nThink of H as a horizontal flip (left swaps with right) and V as a vertical flip (top swaps with bottom). Whichever it is, it's free information."),
+        Section(icon: "laurel.leading", title: "The Clueweave Score",
+                body: "Your Clueweave Score (0–1,600) measures mastery of the whole library. Each puzzle contributes its best result, weighted by tier — a MAX puzzle moves your score about a dozen Easies' worth. Per puzzle you score out of 100: solve at par or faster with no help for a perfect score; assists subtract by how much they reveal, and auto-completing scores zero. If you ever reset your progress, your shared score says so."),
         Section(icon: "link", title: "How do shared puzzles travel without a server?",
                 body: "There's no backend at all. When you share a custom puzzle, the picture itself is encoded into the link — the URL is the puzzle. Your progress, scores and creations live on your device and never leave it."),
         Section(icon: "hand.raised.fill", title: "Your privacy",
-                body: "Pixelogic collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them.",
+                body: "Clueweave collects no data whatsoever: no accounts, no analytics, no tracking, no network calls. Progress, scores, settings and your custom puzzles are stored only on this device, and deleting the app deletes them.",
                 linkLabel: "Read the full privacy policy",
                 linkURL: nil),
         Section(icon: "sparkles", title: "Built entirely with AI",
-                body: "Every part of Pixelogic — even the idea itself — was conceived and written by Claude, Anthropic's AI, working in Claude Code. The concept, the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it was imagined and authored by AI. No human wrote, designed, or directed any of it; there is no human author. A human manager publishes the app and reads feedback at a disposable email address, but authored none of the game.",
+                body: "Every part of Clueweave — even the idea itself — was conceived and written by Claude, Anthropic's AI, working in Claude Code. The concept, the logic engine and its uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test suites, this very page: all of it was imagined and authored by AI. No human wrote, designed, or directed any of it; there is no human author. A human manager publishes the app and reads feedback at a disposable email address, but authored none of the game.",
                 linkLabel: "Try Claude Code for yourself",
                 linkURL: URL(string: "https://claude.ai/referral/8H3jezX92A")),
         Section(icon: "envelope", title: "Send a suggestion",
@@ -235,7 +271,7 @@ struct AboutView: View {
             .padding()
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("About Pixelogic")
+        .navigationTitle("About Clueweave")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -259,15 +295,15 @@ struct PrivacyView: View {
 
     private let paras: [Para] = [
         Para(icon: "checkmark.seal.fill", title: "The short version",
-             body: "Pixelogic collects nothing about you. There are no accounts, no analytics, no advertising, no trackers, and no network connections. Everything you do stays on your device."),
+             body: "Clueweave collects nothing about you. There are no accounts, no analytics, no advertising, no trackers, and no network connections. Everything you do stays on your device."),
         Para(icon: "externaldrive.fill", title: "What's stored, and where",
              body: "Your solved puzzles, scores, best times, settings, and any puzzles you create or generate are saved only on this device, using the system's local storage. They are never uploaded anywhere, and deleting the app deletes all of it."),
         Para(icon: "link", title: "Sharing a puzzle",
              body: "When you share a puzzle, the picture is encoded directly into the link itself — nothing is sent to a server, because there is no server. Opening a shared link simply decodes the puzzle on the recipient's device."),
         Para(icon: "figure.child", title: "Children",
-             body: "Pixelogic is suitable for all ages (rated 4+). Because it collects no data and contains no ads, accounts, or outbound links to user-generated content, it is safe for children to use."),
+             body: "Clueweave is suitable for all ages (rated 4+). Because it collects no data and contains no ads, accounts, or outbound links to user-generated content, it is safe for children to use."),
         Para(icon: "envelope", title: "Contact",
-             body: "Pixelogic is AI-authored (see About). A human manager publishes it and reads feedback at a disposable email address: \(SuggestionMail.address). Questions about privacy can be sent there."),
+             body: "Clueweave is AI-authored (see About). A human manager publishes it and reads feedback at a disposable email address: \(SuggestionMail.address). Questions about privacy can be sent there."),
     ]
 
     var body: some View {
@@ -288,7 +324,7 @@ struct PrivacyView: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Theme.surface))
                 }
 
-                Link(destination: SuggestionMail.url(subject: "Pixelogic privacy question")) {
+                Link(destination: SuggestionMail.url(subject: "Clueweave privacy question")) {
                     Label("Email the manager", systemImage: "paperplane.fill")
                         .font(.system(.subheadline, design: .rounded, weight: .heavy))
                         .foregroundStyle(Theme.primaryDeep)
@@ -318,7 +354,7 @@ private struct BadgeLegendCard: View {
             Label("Badge legend", systemImage: "rosette")
                 .font(.system(.headline, design: .rounded, weight: .black))
                 .foregroundStyle(Theme.ink)
-            Text("Some pictures wear badges that hint how they're built. Because each trait makes a puzzle a little easier, badges weight your Pixelogic Score. Tap one to browse every puzzle that wears it.")
+            Text("Some pictures wear badges that hint how they're built. Because each trait makes a puzzle a little easier, badges weight your Clueweave Score. Tap one to browse every puzzle that wears it.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Theme.ink.opacity(0.9))
                 .lineSpacing(3)
@@ -388,7 +424,7 @@ private struct BadgeLegendRow: View {
 
 struct ExplainerView: View {
     let puzzle: Puzzle
-    @AppStorage("pixelogic.ios.highVisibility") private var highVisibility = false
+    @AppStorage("clueweave.ios.highVisibility") private var highVisibility = false
     @State private var steps: [Deduction] = []
     @State private var grid: Grid
     @State private var stepIndex = 0

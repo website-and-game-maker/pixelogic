@@ -1,9 +1,9 @@
 // Framework-free verification runner: mirrors the Swift Testing suites so the
 // engine can be fully verified with bare Command Line Tools (no Xcode).
-// Exits 1 on any failure.   Run:  swift run pixelogic-verify
+// Exits 1 on any failure.   Run:  swift run clueweave-verify
 
 import Foundation
-import PixelogicKit
+import ClueweaveKit
 
 var failures = 0
 var checks = 0
@@ -70,7 +70,10 @@ print("Grader:")
 let letterA = grid([".###.", "#...#", "#####", "#...#", "#...#"])
 let aClues = cluesForGrid(letterA)
 check(!isLineSolvable(aClues.rowClues, aClues.colClues), "letter A needs contradictions")
-check(gradeGrid(letterA) == .hard, "symmetric contradiction caps at hard")
+// Playtested ground truth: Letter A is easy. 25 cells you can hold in your head,
+// and a mirror axis that hands you half of it. A flat per-contradiction weight
+// plus an easy ceiling below every 5×5 used to ship it as Hard.
+check(gradeGrid(letterA) == .easy, "small symmetric contradiction picture is easy")
 check(gradeGrid(puzzle(withID: "diamond")!.solution) == .medium, "patterned caps at medium")
 
 // MARK: - Scoring
@@ -88,10 +91,10 @@ var voided = AssistTally()
 voided.voided = true
 check(puzzleScore(difficulty: .easy, area: 25, bestTimeMs: 25_000, assists: voided) == 0, "voided = 0")
 let lib2 = [PuzzleMeta(id: "e", difficulty: .easy), PuzzleMeta(id: "x", difficulty: .expert)]
-check(pixelogicScore(bestScores: ["e": 100, "x": 100], library: lib2) == 1600, "perfect = 1600")
-check(pixelogicScore(bestScores: ["e": 100], library: lib2) == 200, "weighting 1/8")
+check(clueweaveScore(bestScores: ["e": 100, "x": 100], library: lib2) == 1600, "perfect = 1600")
+check(clueweaveScore(bestScores: ["e": 100], library: lib2) == 200, "weighting 1/8")
 let badged = [PuzzleMeta(id: "e", difficulty: .easy, weightMult: 0.5), PuzzleMeta(id: "x", difficulty: .expert)]
-check(pixelogicScore(bestScores: ["e": 100, "x": 100], library: badged) == 1600, "badges keep 1600 ceiling")
+check(clueweaveScore(bestScores: ["e": 100, "x": 100], library: badged) == 1600, "badges keep 1600 ceiling")
 check(scoreTitle(1600) == "Grandmaster" && scoreTitle(0) == "Novice", "titles band")
 check(Difficulty.max.checkBudget == 1 && Difficulty.easy.checkBudget == nil, "check budgets")
 
@@ -113,7 +116,7 @@ check(!store.isCompleted("smiley") && store.bestScore(for: "smiley") == nil, "re
 check(store.wasProgressReset, "reset sets disclosure flag")
 check(store.settings.mistakeCheck, "reset keeps settings")
 store.recordScore("plus", score: 100)
-check(store.pixelogicScore > 0, "pixelogic score rises")
+check(store.clueweaveScore > 0, "clueweave score rises")
 
 // MARK: - GameSession (pure play model used by the apps)
 print("GameSession:")
@@ -168,9 +171,9 @@ check((try? decodePuzzle("not-a-token")) == nil, "malformed token throws")
 // MARK: - Share-token parsing (every import path the app accepts)
 print("Share-token parsing:")
 check(shareToken(fromUserInput: token) == token, "bare token passes through")
-check(shareToken(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/p/\(token)") == token, "web URL form parses")
-check(shareToken(fromUserInput: "pixelogic://p/\(token)") == token, "pixelogic:// form parses")
-check(shareToken(fromUserInput: "  pixelogic://p/\(token)\n") == token, "surrounding whitespace trimmed")
+check(shareToken(fromUserInput: "https://website-and-game-maker.github.io/clueweave/#/p/\(token)") == token, "web URL form parses")
+check(shareToken(fromUserInput: "clueweave://p/\(token)") == token, "clueweave:// form parses")
+check(shareToken(fromUserInput: "  clueweave://p/\(token)\n") == token, "surrounding whitespace trimmed")
 check(shareToken(fromUserInput: "https://example.com/nothing-here") == nil, "foreign URL rejected")
 check(shareToken(fromUserInput: "not a token!!") == nil, "junk rejected")
 check(shareToken(fromUserInput: "") == nil, "empty input rejected")
@@ -245,10 +248,10 @@ check(customStore.userPuzzles.isEmpty, "mass delete works")
 
 // MARK: - Library share links
 print("Library share links:")
-check(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/pixelogic/#/play/plus") == "plus", "library URL → id")
+check(libraryShareID(fromUserInput: "https://website-and-game-maker.github.io/clueweave/#/play/plus") == "plus", "library URL → id")
 check(libraryShareID(fromUserInput: "  #/play/heart\n") == "heart", "trims + parses bare fragment")
 check(libraryShareID(fromUserInput: webShareURL(forLibraryID: "smiley").absoluteString) == "smiley", "round-trips webShareURL(forLibraryID:)")
-check(libraryShareID(fromUserInput: "pixelogic://p/\(token)") == nil, "custom token link is not a library link")
+check(libraryShareID(fromUserInput: "clueweave://p/\(token)") == nil, "custom token link is not a library link")
 check(libraryShareID(fromUserInput: "nonsense") == nil, "junk → nil")
 
 // MARK: - Editing a custom puzzle drops its stale in-progress board
@@ -326,22 +329,157 @@ for p in library {
     let count = countSolutionsDetailed(p.rowClues, p.colClues, limit: 2)
     check(count.count == 1 && !count.capped, "\(p.title): provably unique")
     check(isLogicSolvable(p.rowClues, p.colClues), "\(p.title): logic-solvable")
-    check(gradeGrid(p.solution) == p.difficulty, "\(p.title): tier matches engine (\(p.difficulty.rawValue))")
-    let lineSolvable = isLineSolvable(p.rowClues, p.colClues)
-    switch p.difficulty {
-    case .easy, .medium:
-        check(lineSolvable, "\(p.title): line-solvable as befits its tier")
-    case .expert, .max:
-        check(!lineSolvable && !isSymmetric(p.solution), "\(p.title): top-tier rules hold")
-    case .hard:
-        break
-    }
+    check(
+        gradeGrid(p.solution) == p.difficulty,
+        "\(p.title): tier matches engine (stored \(p.difficulty.rawValue), graded \(gradeGrid(p.solution).rawValue))"
+    )
+    // NB: there are deliberately no technique-based tier invariants here any more.
+    // They used to assert "easy/medium ⇒ line-solvable" and "expert/max ⇒ needs
+    // contradictions AND is asymmetric", which described the old grader: tiers
+    // were named after the hardest *technique* required. The grader now measures
+    // total solving *effort*, and those two ideas genuinely come apart —
+    //   • Letter A needs a what-if but is a 25-cell mirror image, so it is Easy;
+    //   • Pine Tree is line-solvable and symmetric but 15×15 of sustained work,
+    //     so it is Extra Hard.
+    // Tier correctness is fully covered by the `gradeGrid == stored` check above;
+    // re-asserting the old technique rules would only pin the bug back in place.
     check(p.rowClues.count == p.height && p.colClues.count == p.width, "\(p.title): clue dimensions")
     check(enumerateSolutions(p.rowClues, p.colClues, limit: 1).first == p.solution, "\(p.title): solver matches art")
 }
-check(puzzle(withID: "diamond")!.difficulty == .medium, "Diamond is Medium")
 check(puzzle(withID: "static")!.difficulty == .max, "Static is MAX")
+// Playtested anchors — these two are how a human actually rates them, and both
+// were mis-tiered by the old sweep-counting grader (A shipped Hard, Cat Medium).
+check(puzzle(withID: "letter-a")!.difficulty == .easy, "Letter A is Easy")
+check(puzzle(withID: "cat")!.difficulty == .hard, "Cat is Hard")
 check(!puzzle(withID: "enigma")!.named && puzzle(withID: "cat")!.named, "name-hint flags")
+
+// MARK: - Progression (docs/progression-model.md §8 test obligations)
+print("Progression:")
+
+func pz(_ id: String, _ d: Difficulty, named: Bool = false) -> Puzzle {
+    // 3×3 with no symmetry and no single-run lines, so it earns no badges.
+    Puzzle(id: id, title: id, solution: grid(["#.#", "...", "#.."]), difficulty: d, named: named)
+}
+// easy×2, medium×2, hard×1 — deliberately shuffled so tier-major sorting shows.
+let plib = [pz("m1", .medium), pz("e1", .easy), pz("h1", .hard), pz("e2", .easy), pz("m2", .medium)]
+let defSettings = ProgressionSettings()
+var pstate = ProgressionState()
+
+// 1. curriculum order
+check(curriculumOrder(plib).map(\.id) == ["e1", "e2", "m1", "m2", "h1"], "curriculum is tier-major, stable")
+check(curriculumNeighbour(plib, id: "e1", offset: -1) == nil, "no wrap before the first puzzle")
+check(curriculumNeighbour(plib, id: "h1", offset: 1) == nil, "no wrap after the last puzzle")
+check(curriculumNeighbour(plib, id: "e1", offset: 1) == "e2", "curriculum next")
+
+// 2-3. signal classification + precedence. easy par = 9 × 1.0s = 9000ms; fast ≤ 5400ms.
+func outcome(
+    solved: Bool = true, voided: Bool = false, assists: AssistTally = AssistTally(), ms: Int
+) -> AttemptOutcome {
+    AttemptOutcome(solved: solved, voided: voided, assists: assists,
+                   elapsedMs: ms, difficulty: .easy, area: 9)
+}
+check(classifySignal(outcome(ms: 1000), defSettings) == .fastClean, "clean + fast → fastClean")
+check(classifySignal(outcome(ms: 8000), defSettings) == .normal, "clean but slow → normal")
+var oneCheck = AssistTally(); oneCheck.checkSquare = 1
+check(classifySignal(outcome(assists: oneCheck, ms: 1000), defSettings) == .normal,
+      "fastClean requires a zero assist penalty")
+check(classifySignal(outcome(voided: true, ms: 1000), defSettings) == .gaveUp, "giving up outranks being fast")
+var boardCheck = AssistTally(); boardCheck.checkBoard = 1
+check(classifySignal(outcome(assists: boardCheck, ms: 1000), defSettings) == .struggled,
+      "a board check outranks being fast")
+var heavyHints = AssistTally(); heavyHints.hint = hintStruggleThreshold
+check(classifySignal(outcome(assists: heavyHints, ms: 8000), defSettings) == .struggled, "heavy hints → struggled")
+var noHintStruggle = ProgressionSettings(); noHintStruggle.hintsCountAsStruggle = false
+check(classifySignal(outcome(assists: heavyHints, ms: 8000), noHintStruggle) == .normal,
+      "hints ignored when the setting is off")
+check(classifySignal(outcome(solved: false, ms: 1000), defSettings) == .abandoned, "unfinished → abandoned")
+
+// 4. promotion needs consecutive fast solves; a normal in between resets it
+pstate = applySignal(.fastClean, ProgressionState(), defSettings, plib, [])
+check(pstate.workingTier == .easy && pstate.fastStreak == 1, "one fast solve does not promote")
+pstate = applySignal(.fastClean, pstate, defSettings, plib, [])
+check(pstate.workingTier == .medium && pstate.fastStreak == 0, "two fast solves promote")
+var broken = applySignal(.fastClean, ProgressionState(), defSettings, plib, [])
+broken = applySignal(.normal, broken, defSettings, plib, [])
+broken = applySignal(.fastClean, broken, defSettings, plib, [])
+check(broken.workingTier == .easy, "a normal solve breaks the fast streak")
+
+// 5. demotion needs consecutive struggles
+var hardState = ProgressionState(); hardState.workingTier = .hard
+var dem = applySignal(.gaveUp, hardState, defSettings, plib, [])
+check(dem.workingTier == .hard, "a single give-up holds the tier")
+dem = applySignal(.gaveUp, dem, defSettings, plib, [])
+check(dem.workingTier == .medium, "a second give-up demotes")
+
+// 6. canDemote is false when everything below is cleared
+let clearedBelow: Set<String> = ["e1", "e2", "m1", "m2"]
+check(!canDemote(.hard, plib, clearedBelow), "cannot demote into a fully cleared run")
+check(canDemote(.hard, plib, ["m1", "m2"]), "can demote when only two tiers down has work")
+check(!canDemote(.easy, plib, []), "cannot demote below the lowest tier")
+var held = applySignal(.gaveUp, hardState, defSettings, plib, clearedBelow)
+held = applySignal(.gaveUp, held, defSettings, plib, clearedBelow)
+check(held.workingTier == .hard, "holds position when there is nothing useful below")
+
+// 7. autoAdjustDifficulty off records streaks but never moves the tier
+var noAdjust = ProgressionSettings(); noAdjust.autoAdjustDifficulty = false
+var frozen = applySignal(.fastClean, ProgressionState(), noAdjust, plib, [])
+frozen = applySignal(.fastClean, frozen, noAdjust, plib, [])
+check(frozen.workingTier == .easy && frozen.fastStreak == 2, "auto-adjust off freezes the tier")
+
+// 8. recommendation walks the tier, then up, then down
+var medState = ProgressionState(); medState.workingTier = .medium
+check(recommend(medState, plib, [], [:])?.puzzleID == "m1", "recommends within the working tier")
+check(recommend(medState, plib, ["m1", "m2"], [:])?.puzzleID == "h1", "walks upward when the tier is done")
+check(recommend(medState, plib, ["m1", "m2", "h1"], [:])?.puzzleID == "e1", "walks down only as a last resort")
+
+// 9. best improvement respects tier weight × badge multiplier
+let allDone = Set(plib.map(\.id))
+check(recommend(medState, plib, allDone, ["e1": 0, "e2": 100, "m1": 100, "m2": 100, "h1": 50])?.puzzleID == "h1",
+      "best improvement weighs tier, not the raw gap")
+let badgeLib = [pz("plain", .hard), pz("badged", .hard, named: true)]
+check(recommend(medState, badgeLib, ["plain", "badged"], ["plain": 40, "badged": 40])?.puzzleID == "plain",
+      "best improvement weighs badge multipliers")
+
+// 10. spam guard degrades smart next to plain curriculum order; a solve clears it
+check(smartNextTarget(medState, currentPuzzleID: "e1", defSettings, plib, [], [:])?.puzzleID == "m1",
+      "smart next recommends under the threshold")
+var spammed = medState; spammed.spamCount = spamThreshold
+check(smartNextTarget(spammed, currentPuzzleID: "e1", defSettings, plib, [], [:])?.puzzleID == "e2",
+      "spam guard degrades to plain curriculum next")
+var smartOff = ProgressionSettings(); smartOff.smartNext = false
+check(smartNextTarget(medState, currentPuzzleID: "e1", smartOff, plib, [], [:])?.puzzleID == "e2",
+      "smart next off behaves as plain next")
+check(smartNextTarget(medState, currentPuzzleID: "h1", smartOff, plib, [], [:]) == nil,
+      "plain next has nowhere to go past the last puzzle")
+check(applySignal(.normal, spammed, defSettings, plib, []).spamCount == 0, "a finished attempt clears the spam guard")
+check(applySignal(.abandoned, spammed, defSettings, plib, []).spamCount == spamThreshold,
+      "abandoning does not clear the spam guard")
+
+// 11. sensitivity constants
+check(FastSensitivity.relaxed.factor == 0.5 && FastSensitivity.relaxed.streak == 3, "relaxed tuning")
+check(FastSensitivity.normal.factor == 0.6 && FastSensitivity.normal.streak == 2, "normal fast tuning")
+check(FastSensitivity.eager.factor == 0.75 && FastSensitivity.eager.streak == 2, "eager tuning")
+check(StruggleSensitivity.forgiving.streak == 3 && StruggleSensitivity.normal.streak == 2
+        && StruggleSensitivity.quick.streak == 1, "struggle tuning")
+
+// 12. never recommend the puzzle you are already on
+check(smartNextTarget(medState, currentPuzzleID: "m1", defSettings, plib, [], [:])?.puzzleID == "m2",
+      "smart next never returns the current puzzle")
+check(smartNextTarget(medState, currentPuzzleID: "m1", defSettings, plib, ["m2"], [:])?.puzzleID == "h1",
+      "moves on when the current puzzle is the only one left at the tier")
+check(recommend(medState, plib, allDone, ["e1": 0, "e2": 100, "m1": 100, "m2": 100, "h1": 50],
+                excludeID: "h1")?.puzzleID == "e1",
+      "excludeID applies to the best-improvement branch too")
+
+// Persistence tolerance: a corrupt progression block must not poison the save.
+let junk = Data(#"{"completed":["plus"],"progression":{"workingTier":"nonsense","fastStreak":"x"}}"#.utf8)
+if let decoded = try? JSONDecoder().decode(SaveData.self, from: junk) {
+    check(decoded.completed == ["plus"], "corrupt progression keeps the rest of the save")
+    check(decoded.progression.workingTier == .easy && decoded.progression.fastStreak == 0,
+          "corrupt progression falls back to defaults")
+} else {
+    check(false, "save with a corrupt progression block still decodes")
+}
 
 print("\n\(checks) checks, \(failures) failures")
 if failures > 0 {

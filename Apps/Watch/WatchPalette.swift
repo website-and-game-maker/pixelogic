@@ -1,11 +1,11 @@
-// Watch-local color palette. The shared PixelogicKit BadgeKey ships a geometric
+// Watch-local color palette. The shared ClueweaveKit BadgeKey ships a geometric
 // SF Symbol per badge (`.glyph`) but no color — the apps choose their own. These
 // are the watch's choices, kept in one place so the rows, the legend, the
 // section headers, and now the board stay consistent. Tuned to read on the dark
-// watch background while staying in the Pixelogic teal/baby-blue family.
+// watch background while staying in the Clueweave teal/baby-blue family.
 
 import SwiftUI
-import PixelogicKit
+import ClueweaveKit
 
 extension Color {
     init(hex: UInt32) {
@@ -47,7 +47,7 @@ enum WatchPalette {
     }
 
     /// One-line plain-language meaning for the legend (wrist-sized; the full
-    /// blurb lives in PixelogicKit for the phone/web).
+    /// blurb lives in ClueweaveKit for the phone/web).
     static func meaning(for key: BadgeKey) -> String {
         switch key {
         case .symmetric: return "Picture mirrors itself — solve one side, get the other."

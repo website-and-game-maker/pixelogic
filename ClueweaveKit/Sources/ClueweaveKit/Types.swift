@@ -1,4 +1,4 @@
-// Core types for the Pixelogic logic engine. Pure data — no UI, no side effects.
+// Core types for the Clueweave logic engine. Pure data — no UI, no side effects.
 // A faithful Swift port of the web engine (src/engine/types.ts).
 
 /// Tri-state cell used by the solver.

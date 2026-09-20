@@ -1,4 +1,4 @@
-// Observable wrapper around PixelogicKit's pure GameSession — the bridge
+// Observable wrapper around ClueweaveKit's pure GameSession — the bridge
 // between engine semantics and SwiftUI. Mirrors the web play view's behaviour:
 // assists with live penalty meter, auto-cross, scoring on win, post-solve mode.
 // Unfinished attempts persist (board + clock + assists) so quitting never
@@ -6,7 +6,7 @@
 
 import SwiftUI
 import Combine
-import PixelogicKit
+import ClueweaveKit
 
 @MainActor
 final class PlayViewModel: ObservableObject {
@@ -139,7 +139,26 @@ final class PlayViewModel: ObservableObject {
 
     func voidForWatchSolve() {
         session.voidForWatchSolve()
+        // Asking to be shown the answer is the clearest give-up signal there is.
+        recordAttemptSignal(solved: false)
         sync()
+    }
+
+    /// Fold this attempt's outcome into the progression model. Only built-in
+    /// library puzzles teach it anything — custom, generated, shared and
+    /// test-play puzzles must not. See docs/progression-model.md §2.
+    private func recordAttemptSignal(solved didSolve: Bool) {
+        guard isLibrary else { return }
+        let outcome = AttemptOutcome(
+            solved: didSolve,
+            voided: session.filledOut || session.assists.voided,
+            assists: session.assists,
+            elapsedMs: session.elapsedMs,
+            difficulty: puzzle.difficulty,
+            area: puzzle.area
+        )
+        let signal = classifySignal(outcome, store.settings.progression)
+        store.recordSignal(signal, library: library)
     }
 
     func undo() { session.undo(); sync() }
@@ -220,6 +239,8 @@ final class PlayViewModel: ObservableObject {
             isNewBestTime = time.isNew
         }
         if let key = persistKey { store.clearInProgress(for: key) }
+        // After the score is settled, so the assist tally is final.
+        recordAttemptSignal(solved: true)
         showWinSheet = true
     }
 
@@ -227,7 +248,7 @@ final class PlayViewModel: ObservableObject {
     var shareText: String {
         let time = TimeFormat.string(ms: elapsedMs)
         let scoreBit = finalScore.map { " (scored \($0)/100)" } ?? ""
-        return "I solved “\(puzzle.title)” on Pixelogic in \(time)\(scoreBit)! ▦"
+        return "I solved “\(puzzle.title)” on Clueweave in \(time)\(scoreBit)! ▦"
     }
 
     /// Library puzzles share their web page; custom puzzles share the encoded

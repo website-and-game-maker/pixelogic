@@ -1,4 +1,4 @@
-// Ad readiness — PROTOCOL ONLY. Pixelogic ships absolutely free with no ads,
+// Ad readiness — PROTOCOL ONLY. Clueweave ships absolutely free with no ads,
 // no tracking, and no reserved ad space in any layout.
 //
 // This file exists so that IF ads are ever added, the integration path is

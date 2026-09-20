@@ -1,10 +1,10 @@
-// Home: brand, tagline, laurel Pixelogic Score, actions, tier sections with
+// Home: brand, tagline, laurel Clueweave Score, actions, tier sections with
 // score/time cards + badge trait chips, My Puzzles with manage mode —
 // the web menu, translated to an adaptive iPhone/iPad grid.
 
 import SwiftUI
 import UIKit
-import PixelogicKit
+import ClueweaveKit
 
 struct HomeView: View {
     @EnvironmentObject private var app: AppModel
@@ -52,7 +52,7 @@ struct HomeView: View {
                 Button { app.showTutorial = true } label: { Image(systemName: "graduationcap") }
                     .accessibilityLabel("How to play tutorial")
                 NavigationLink(value: Route.about) { Image(systemName: "info.circle") }
-                    .accessibilityLabel("About Pixelogic")
+                    .accessibilityLabel("About Clueweave")
                 Button { app.showSettings = true } label: { Image(systemName: "gearshape") }
                     .accessibilityLabel("Settings")
             }
@@ -67,7 +67,7 @@ struct HomeView: View {
                     .foregroundStyle(.white)
                     .frame(width: 52, height: 52)
                     .background(RoundedRectangle(cornerRadius: 16).fill(Theme.brandGradient))
-                Text("Pixelogic")
+                Text("Clueweave")
                     .font(.system(size: 38, weight: .black, design: .rounded))
                     .foregroundStyle(Theme.primaryDeep)
             }
@@ -75,14 +75,15 @@ struct HomeView: View {
                 .font(.system(.subheadline, design: .rounded, weight: .bold))
                 .foregroundStyle(Theme.inkSoft)
 
-            // Pixelogic Score laurel (below the tagline, above the actions).
+            // Clueweave Score laurel (below the tagline, above the actions).
             // The laurel grows and gilds as the score climbs: a humble green
             // sprig for beginners, a fuller green branch, then bronze, silver,
             // and finally a full golden wreath for pros.
-            let score = app.store.pixelogicScore
+            let score = app.store.clueweaveScore
             let laurel = laurelTier(for: score)
             HStack(spacing: 12) {
-                Image(laurel.name).resizable().scaledToFit().frame(height: laurel.height)
+                Image(systemName: "laurel.leading").resizable().scaledToFit().frame(height: laurel.height)
+                    .foregroundStyle(laurel.tint)
                     .accessibilityHidden(true)
                 VStack(spacing: 0) {
                     Text("\(score)")
@@ -93,17 +94,18 @@ struct HomeView: View {
                         .font(.system(size: 11, weight: .black, design: .rounded))
                         .foregroundStyle(Theme.primaryDeep)
                 }
-                Image(laurel.name).resizable().scaledToFit().frame(height: laurel.height).scaleEffect(x: -1)
+                Image(systemName: "laurel.trailing").resizable().scaledToFit().frame(height: laurel.height)
+                    .foregroundStyle(laurel.tint)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 8)
             .background(RoundedRectangle(cornerRadius: 22).fill(Theme.surface).shadow(color: Theme.primaryDeep.opacity(0.12), radius: 10, y: 4))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Pixelogic Score \(score) of 1600, \(scoreTitle(score))")
+            .accessibilityLabel("Clueweave Score \(score) of 1600, \(scoreTitle(score))")
 
             HStack(spacing: 18) {
-                ShareLink(item: URL(string: "https://website-and-game-maker.github.io/pixelogic/")!, message: Text(scoreShareText)) {
+                ShareLink(item: URL(string: "https://website-and-game-maker.github.io/clueweave/")!, message: Text(scoreShareText)) {
                     Label("Share score", systemImage: "square.and.arrow.up")
                         .font(.system(.caption, design: .rounded, weight: .heavy))
                 }
@@ -111,7 +113,7 @@ struct HomeView: View {
                     Label("Import a puzzle", systemImage: "square.and.arrow.down")
                         .font(.system(.caption, design: .rounded, weight: .heavy))
                 }
-                .accessibilityHint("Paste a shared Pixelogic link to add the puzzle")
+                .accessibilityHint("Paste a shared Clueweave link to add the puzzle")
             }
 
             HStack(spacing: 12) {
@@ -123,15 +125,38 @@ struct HomeView: View {
                         .background(Capsule().fill(Theme.brandGradient))
                         .foregroundStyle(.white)
                 }
-                Button {
-                    app.path.append(Route.play(surpriseID()))
-                } label: {
-                    Label("Surprise me", systemImage: "die.face.5")
-                        .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                if let rec = recommendation,
+                   let pick = library.first(where: { $0.id == rec.puzzleID }) {
+                    Button {
+                        app.path.append(Route.play(rec.puzzleID))
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label("Recommended puzzle", systemImage: "target")
+                                .font(.system(.caption2, design: .rounded, weight: .black))
+                                .textCase(.uppercase)
+                                .foregroundStyle(Theme.inkSoft)
+                            HStack(spacing: 6) {
+                                Text(pick.title)
+                                    .font(.system(.subheadline, design: .rounded, weight: .black))
+                                    .foregroundStyle(Theme.ink)
+                                DifficultyChip(difficulty: pick.difficulty)
+                            }
+                            Text(rec.reason)
+                                .font(.system(.caption2, design: .rounded, weight: .bold))
+                                .foregroundStyle(Theme.primaryDeep)
+                        }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Theme.surface))
-                        .foregroundStyle(Theme.ink)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .strokeBorder(Theme.primary.opacity(0.35), lineWidth: 2))
+                        )
+                    }
+                    .accessibilityLabel(
+                        "Recommended puzzle: \(pick.title), \(pick.difficulty.displayName). \(rec.reason)")
                 }
             }
             NavigationLink(value: Route.generator) {
@@ -151,41 +176,40 @@ struct HomeView: View {
     }
 
     private var scoreShareText: String {
-        let score = app.store.pixelogicScore
+        let score = app.store.clueweaveScore
         let solved = library.filter { app.store.isCompleted($0.id) }.count
         let reset = app.store.wasProgressReset ? " (progress was reset at least once)" : ""
-        return "My Pixelogic Score is \(score)/1600 — \(scoreTitle(score)) (\(solved)/\(library.count) solved)\(reset). ▦ Can you beat it?"
+        return "My Clueweave Score is \(score)/1600 — \(scoreTitle(score)) (\(solved)/\(library.count) solved)\(reset). ▦ Can you beat it?"
     }
 
-    /// The laurel that flanks the score, by tier. It grows fuller and gilds as
-    /// the Pixelogic Score climbs; the first upgrade arrives after only a little
+    /// The laurel that flanks the score, by tier. It grows and gilds as the
+    /// Clueweave Score climbs; the first upgrade arrives after only a little
     /// play. Thresholds are deliberately easy to tune.
-    private func laurelTier(for score: Int) -> (name: String, height: CGFloat) {
+    ///
+    /// This was five bitmap imagesets until the licensing pass: that art was
+    /// rasterized from the system emoji font, which may not be redistributed
+    /// inside an app bundle. It is now the SF Symbol laurel — shipped by the OS
+    /// and licensed for in-app use — tinted and sized per tier instead.
+    private func laurelTier(for score: Int) -> (tint: Color, height: CGFloat) {
         switch score {
-        case ..<30:  return ("Laurel", 30)        // Beginner — the humble green sprig
-        case ..<120: return ("LaurelGreen", 42)   // first upgrade — arrives soon
-        case ..<350: return ("LaurelBronze", 50)
-        case ..<800: return ("LaurelSilver", 58)
-        default:     return ("LaurelGold", 68)    // Pro — full golden wreath
+        case ..<30:  return (Theme.primary, 30)      // Beginner — a humble sprig
+        case ..<120: return (Theme.primaryDeep, 42)  // first upgrade — arrives soon
+        case ..<350: return (Theme.bronze, 50)
+        case ..<800: return (Theme.silver, 58)
+        default:     return (Theme.gold, 68)         // Pro — the full gilded wreath
         }
     }
 
-    /// Adaptive Surprise me: a random unsolved puzzle from the frontier tier.
-    private func surpriseID() -> String {
-        let completed = Set(library.filter { app.store.isCompleted($0.id) }.map(\.id))
-        var frontier = 0
-        for (i, tier) in Difficulty.ordered.enumerated()
-        where library.contains(where: { $0.difficulty == tier && completed.contains($0.id) }) {
-            frontier = i
-        }
-        let tierList = puzzles(in: Difficulty.ordered[frontier])
-        let cleared = !tierList.isEmpty && tierList.allSatisfy { completed.contains($0.id) }
-        let start = cleared ? min(frontier + 1, Difficulty.ordered.count - 1) : frontier
-        for i in start..<Difficulty.ordered.count {
-            let pool = puzzles(in: Difficulty.ordered[i]).filter { !completed.contains($0.id) }
-            if let pick = pool.randomElement() { return pick.id }
-        }
-        return (library.filter { !completed.contains($0.id) }.randomElement() ?? library[0]).id
+    /// The progression model's pick, with its reasoning. Replaces the old random
+    /// "Surprise me" — this names its choice and says why, so the suggestion is
+    /// legible rather than a dice roll. See docs/progression-model.md §5.
+    private var recommendation: Recommendation? {
+        recommend(
+            app.store.progression,
+            library,
+            app.store.data.completed,
+            app.store.data.bestScores
+        )
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
@@ -415,7 +439,7 @@ struct PuzzleCard: View {
 }
 
 /// Paste-to-import for shared puzzles: accepts the web link, the
-/// pixelogic:// link, or a bare token — the puzzle lives inside the link.
+/// clueweave:// link, or a bare token — the puzzle lives inside the link.
 struct ImportPuzzleView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -428,7 +452,7 @@ struct ImportPuzzleView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Paste a Pixelogic link or code", text: $input, axis: .vertical)
+                    TextField("Paste a Clueweave link or code", text: $input, axis: .vertical)
                         .lineLimit(3...6)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
@@ -439,7 +463,7 @@ struct ImportPuzzleView: View {
                         Label("Paste from clipboard", systemImage: "doc.on.clipboard")
                     }
                 } footer: {
-                    Text("Works with links shared from Pixelogic on the web or on another device — the whole puzzle is encoded in the link itself. Nothing is downloaded.")
+                    Text("Works with links shared from Clueweave on the web or on another device — the whole puzzle is encoded in the link itself. Nothing is downloaded.")
                 }
                 if let errorText {
                     Section { Text(errorText).foregroundStyle(.red) }
@@ -469,13 +493,13 @@ struct ImportPuzzleView: View {
     private func importNow() {
         errorText = nil
         // A library link (web #/play/<id>) opens the built-in puzzle directly.
-        if let libID = libraryShareID(fromUserInput: input), PixelogicKit.puzzle(withID: libID) != nil {
+        if let libID = libraryShareID(fromUserInput: input), ClueweaveKit.puzzle(withID: libID) != nil {
             open(.play(libID))
             return
         }
         guard let token = shareToken(fromUserInput: input),
               let decoded = try? decodePuzzle(token) else {
-            errorText = "That doesn\u{2019}t look like a Pixelogic puzzle link. Copy the whole link (it contains \u{201C}/p/\u{201D}) and try again."
+            errorText = "That doesn\u{2019}t look like a Clueweave puzzle link. Copy the whole link (it contains \u{201C}/p/\u{201D}) and try again."
             return
         }
         checking = true

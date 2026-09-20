@@ -8,3 +8,6 @@ Support/Info-iOS.plist
 Support/Info-Watch.plist
 Package.resolved
 *.pbxproj
+
+# local SwiftPM/Xcode state
+.swiftpm/

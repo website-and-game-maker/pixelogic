@@ -1,7 +1,7 @@
 // Pure scoring model (port of src/engine/scoring.ts).
 //
 // Per-puzzle score (0–100):  round(100 × min(1, par/bestTime)) − assist penalties.
-// Pixelogic Score (0–1600):  difficulty- and badge-weighted average of best
+// Clueweave Score (0–1600):  difficulty- and badge-weighted average of best
 //                            per-puzzle scores across the whole library.
 
 import Foundation
@@ -93,9 +93,9 @@ public struct PuzzleMeta: Sendable {
     }
 }
 
-/// Overall Pixelogic Score in [0,1600]. Unsolved puzzles count as 0; badge
+/// Overall Clueweave Score in [0,1600]. Unsolved puzzles count as 0; badge
 /// multipliers shift each puzzle's share (a perfect run is 1600 regardless).
-public func pixelogicScore(bestScores: [String: Int], library: [PuzzleMeta]) -> Int {
+public func clueweaveScore(bestScores: [String: Int], library: [PuzzleMeta]) -> Int {
     var earned = 0.0
     var possible = 0.0
     for p in library {
@@ -106,7 +106,7 @@ public func pixelogicScore(bestScores: [String: Int], library: [PuzzleMeta]) -> 
     return possible > 0 ? Int((1600.0 * earned / possible).rounded()) : 0
 }
 
-/// A flavour title for a Pixelogic Score, shown beneath the laurel.
+/// A flavour title for a Clueweave Score, shown beneath the laurel.
 public func scoreTitle(_ score: Int) -> String {
     switch score {
     case 1500...: "Grandmaster"

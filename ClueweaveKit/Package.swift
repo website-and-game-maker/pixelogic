@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "PixelogicKit",
+    name: "ClueweaveKit",
     platforms: [
         .iOS(.v16),
         .watchOS(.v9),
         .macOS(.v13),
     ],
     products: [
-        .library(name: "PixelogicKit", targets: ["PixelogicKit"])
+        .library(name: "ClueweaveKit", targets: ["ClueweaveKit"])
     ],
     targets: [
-        .target(name: "PixelogicKit"),
+        .target(name: "ClueweaveKit"),
         // Full test suite (Swift Testing) — runs under Xcode's toolchain.
-        .testTarget(name: "PixelogicKitTests", dependencies: ["PixelogicKit"]),
+        .testTarget(name: "ClueweaveKitTests", dependencies: ["ClueweaveKit"]),
         // Framework-free verifier so the same checks run with bare Command
-        // Line Tools (no Xcode):  swift run pixelogic-verify
-        .executableTarget(name: "pixelogic-verify", dependencies: ["PixelogicKit"]),
+        // Line Tools (no Xcode):  swift run clueweave-verify
+        .executableTarget(name: "clueweave-verify", dependencies: ["ClueweaveKit"]),
     ]
 )
