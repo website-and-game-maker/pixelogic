@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { LIBRARY, getPuzzle, byDifficulty } from "../src/engine/puzzles";
-import { hasUniqueSolution, isLineSolvable, solve } from "../src/engine/solver";
+import { hasUniqueSolution, solve } from "../src/engine/solver";
 import { isLogicSolvable } from "../src/engine/deduce";
-import { isSymmetric } from "../src/engine/symmetry";
+import { gradeGrid } from "../src/engine/grader";
 
 describe("puzzle library invariants", () => {
   it("ships a healthy number of puzzles", () => {
@@ -27,19 +27,16 @@ describe("puzzle library invariants", () => {
       it("has exactly one solution", () => {
         expect(hasUniqueSolution(p.rowClues, p.colClues)).toBe(true);
       });
-      it("is solvable by logic and obeys its tier's rules", () => {
-        const lineSolvable = isLineSolvable(p.rowClues, p.colClues);
+      it("is solvable by logic and its stored tier matches the grader", () => {
         // Every puzzle is solvable without guessing (line logic + depth-1 contradiction).
         expect(isLogicSolvable(p.rowClues, p.colClues)).toBe(true);
-        if (p.difficulty === "easy" || p.difficulty === "medium") {
-          expect(lineSolvable).toBe(true); // pure line logic
-        }
-        if (p.difficulty === "expert" || p.difficulty === "max") {
-          // Extra Hard / Max genuinely need contradiction, and are never symmetric
-          // (a symmetric picture is capped at Hard).
-          expect(lineSolvable).toBe(false);
-          expect(isSymmetric(p.solution)).toBe(false);
-        }
+        // Difficulty is derived from the grader, never hand-forced: the stored
+        // tier must equal a fresh grade of the picture. Tier is a function of
+        // solving *effort*, discounted by the information a symmetric/patterned
+        // shape leaks — it is deliberately NOT tied to line-solvability, so a
+        // small symmetric contradiction puzzle can be Medium and a heavy
+        // symmetric 15×15 can be Extra Hard.
+        expect(gradeGrid(p.solution)).toBe(p.difficulty);
       });
       it("the engine's solution matches the stored picture", () => {
         const { solution } = solve(p.rowClues, p.colClues);

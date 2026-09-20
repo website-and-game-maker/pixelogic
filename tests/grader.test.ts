@@ -8,12 +8,12 @@ function bits(rows: string[]) {
   return rows.map((r) => [...r].map((c) => c === "#"));
 }
 
-const DIFFS = ["easy", "medium", "hard", "expert"] as const;
+const DIFFS = ["easy", "medium", "hard", "expert", "max"] as const;
 
 describe("grade", () => {
-  it("grades a trivially line-solvable small puzzle as easy or medium", () => {
+  it("grades a trivially line-solvable small puzzle as easy", () => {
     const { rowClues, colClues } = cluesForGrid(bits(["##", "##"]));
-    expect(["easy", "medium"]).toContain(grade(rowClues, colClues));
+    expect(grade(rowClues, colClues)).toBe("easy");
   });
 
   it("returns a valid difficulty for a larger line-solvable puzzle", () => {
@@ -23,24 +23,58 @@ describe("grade", () => {
     expect(DIFFS).toContain(grade(rowClues, colClues));
   });
 
-  it("classifies a non-line-solvable puzzle as hard or expert", () => {
-    // checkerboard ambiguity is not line-solvable
+  it("does NOT over-grade a trivial non-line-solvable puzzle", () => {
+    // A 2×2 with one filled cell per line is ambiguous (not line-solvable), but
+    // the search space is tiny. The old grader called *anything* non-line-
+    // solvable "expert"; the effort model correctly keeps this at the bottom.
     const rowClues = [[1], [1]];
     const colClues = [[1], [1]];
-    expect(["hard", "expert"]).toContain(grade(rowClues, colClues));
+    expect(isLineSolvable(rowClues, colClues)).toBe(false);
+    expect(grade(rowClues, colClues)).toBe("easy");
+  });
+
+  it("does not inflate a tiny puzzle just for needing a what-if (clue-only)", () => {
+    // Letter A needs a contradiction proof, but on a 5×5 that proof is "look at
+    // the two ways this can sit in a five-cell line". Weighting each what-if by
+    // the longest line keeps it honest; a flat weight used to shove this two
+    // whole tiers up. Judged on clues alone (no grid ⇒ no symmetry discount).
+    const letterA = bits([".###.", "#...#", "#####", "#...#", "#...#"]);
+    const { rowClues, colClues } = cluesForGrid(letterA);
+    expect(isLineSolvable(rowClues, colClues)).toBe(false);
+    expect(grade(rowClues, colClues)).toBe("medium");
   });
 });
 
 describe("gradeGrid", () => {
-  it("caps a symmetric contradiction picture at hard", () => {
-    // Letter A is left-right symmetric AND needs contradiction reasoning. The
-    // base grader calls it expert; the symmetry rule caps it at hard.
+  it("grades a small symmetric contradiction picture as easy", () => {
+    // Ground truth from playtesting: Letter A is *easy*. It is 25 cells, you can
+    // hold the whole board in your head, and the mirror axis hands you half of
+    // it. Two things used to over-grade it — a flat per-contradiction weight and
+    // an easy ceiling that sat below every 5×5 — and between them they shipped a
+    // trivial puzzle as Hard. Both are fixed; this test pins the outcome.
     const letterA = bits([".###.", "#...#", "#####", "#...#", "#...#"]);
-    const { rowClues, colClues } = cluesForGrid(letterA);
     expect(isSymmetric(letterA)).toBe(true);
-    expect(isLineSolvable(rowClues, colClues)).toBe(false);
-    expect(grade(rowClues, colClues)).toBe("expert");
-    expect(gradeGrid(letterA)).toBe("hard");
+    expect(gradeGrid(letterA)).toBe("easy");
+  });
+
+  it("grades an irregular 10×10 with no shape discount as hard", () => {
+    // The other half of the same playtest: Cat is hard. It is asymmetric and
+    // unpatterned, so nothing discounts it, and 100 cells of real deduction is
+    // genuinely more work than any 5×5 — which sweep-counting used to miss.
+    const cat = bits([
+      "#........#",
+      "##......##",
+      ".########.",
+      ".#.####.#.",
+      ".########.",
+      ".########.",
+      ".########.",
+      ".#######..",
+      ".#######.#",
+      ".######.##",
+    ]);
+    expect(isSymmetric(cat)).toBe(false);
+    expect(gradeGrid(cat)).toBe("hard");
   });
 
   it("leaves an asymmetric line-solvable picture below expert", () => {

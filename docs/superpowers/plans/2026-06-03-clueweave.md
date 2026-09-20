@@ -1,8 +1,8 @@
-# Pixelogic Implementation Plan
+# Clueweave Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build Pixelogic — a nonogram logic-puzzle game with a provably-correct logic engine, a curated puzzle library, a calm friendly UI, a hint/explainer, and a custom editor — deployed to GitHub Pages.
+**Goal:** Build Clueweave — a nonogram logic-puzzle game with a provably-correct logic engine, a curated puzzle library, a calm friendly UI, a hint/explainer, and a custom editor — deployed to GitHub Pages.
 
 **Architecture:** A pure, DOM-free TypeScript engine (`src/engine/`) does all reasoning — line solving, propagation, uniqueness proofs, grading, generation. A thin UI layer (`src/ui/`) renders the board, handles input, persists progress, and consumes the engine for hints/explanations/editor verdicts. Vite builds a static SPA.
 
@@ -943,7 +943,7 @@ visible; reduced-motion respected.
 ## Task 20: Deploy + verify live URL
 
 - [ ] Push to `main`; watch the Actions deploy succeed.
-- [ ] Load **https://website-and-game-maker.github.io/pixelogic/** in Chrome; confirm it loads and
+- [ ] Load **https://website-and-game-maker.github.io/clueweave/** in Chrome; confirm it loads and
   a puzzle is playable on the live site. Report the URL.
 
 ---

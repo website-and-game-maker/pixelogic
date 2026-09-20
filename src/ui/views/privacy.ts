@@ -20,7 +20,7 @@ const SECTIONS: Section[] = [
   {
     icon: "🔒",
     title: "The short version",
-    html: `<p>Pixelogic collects nothing about you. There are no accounts, no analytics,
+    html: `<p>Clueweave collects nothing about you. There are no accounts, no analytics,
       no advertising, no trackers, and no network connections. Everything you do stays in
       your browser, on your device.</p>`,
   },
@@ -42,16 +42,16 @@ const SECTIONS: Section[] = [
   {
     icon: "🧒",
     title: "Children",
-    html: `<p>Pixelogic is suitable for all ages. Because it collects no data and contains no
+    html: `<p>Clueweave is suitable for all ages. Because it collects no data and contains no
       ads, accounts, or outbound links to user-generated content, it is safe for children to
       use.</p>`,
   },
   {
     icon: "✉️",
     title: "Contact",
-    html: `<p>Pixelogic is AI-authored (see About). A human manager publishes it and reads
+    html: `<p>Clueweave is AI-authored (see About). A human manager publishes it and reads
       feedback at a disposable email address:
-      <a href="mailto:${MANAGER_EMAIL}?subject=Pixelogic%20privacy%20question">${MANAGER_EMAIL}</a>.
+      <a href="mailto:${MANAGER_EMAIL}?subject=Clueweave%20privacy%20question">${MANAGER_EMAIL}</a>.
       Questions about privacy can be sent there.</p>`,
   },
 ];

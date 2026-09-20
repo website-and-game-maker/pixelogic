@@ -1,11 +1,12 @@
 import type { Puzzle, Difficulty } from "../../engine/types";
 import { LIBRARY, DIFFICULTY_ORDER } from "../../engine/puzzles";
 import { puzzleBadges } from "../../engine/badges";
+import { recommend } from "../../engine/progression";
 import { scoreTitle } from "../../engine/scoring";
 import { el, mount } from "../dom";
 import { difficultyMeta, sizeLabel } from "../format";
 import { libraryCard, badgeChip } from "../cards";
-import { loadSave, deleteUserPuzzle, getPixelogicScore, wasProgressReset } from "../persistence";
+import { loadSave, deleteUserPuzzle, getClueweaveScore, wasProgressReset } from "../persistence";
 import { openSettings } from "../settings";
 import { shareScore } from "../share";
 import { navigate } from "../router";
@@ -145,26 +146,38 @@ export function renderMenu(host: HTMLElement): void {
     sections.push(mySection);
   }
 
-  // ---- adaptive Surprise me: jump to the player's frontier tier ----
-  function surpriseId(): string {
-    let frontier = 0;
-    for (let i = 0; i < DIFFICULTY_ORDER.length; i++) {
-      if (LIBRARY.some((p) => p.difficulty === DIFFICULTY_ORDER[i] && completed.has(p.id))) frontier = i;
-    }
-    const ft = DIFFICULTY_ORDER[frontier];
-    const ftList = LIBRARY.filter((p) => p.difficulty === ft);
-    const fullyCleared = ftList.length > 0 && ftList.every((p) => completed.has(p.id));
-    const start = fullyCleared ? Math.min(frontier + 1, DIFFICULTY_ORDER.length - 1) : frontier;
-    for (let i = start; i < DIFFICULTY_ORDER.length; i++) {
-      const pool = LIBRARY.filter((p) => p.difficulty === DIFFICULTY_ORDER[i] && !completed.has(p.id));
-      if (pool.length) return pool[Math.floor(Math.random() * pool.length)].id;
-    }
-    const unsolved = LIBRARY.filter((p) => !completed.has(p.id));
-    const pool = unsolved.length ? unsolved : LIBRARY;
-    return pool[Math.floor(Math.random() * pool.length)].id;
-  }
+  // ---- Recommended puzzle ----
+  // Replaces the old random "Surprise me". This names its pick and says why, so
+  // the choice is legible rather than a dice roll. See docs/progression-model.md.
+  const rec = recommend(save.progression, LIBRARY, completed, save.bestScores);
+  const recPuzzle = rec ? LIBRARY.find((p) => p.id === rec.puzzleId) : undefined;
+  const recommendBtn =
+    rec && recPuzzle
+      ? el(
+          "button",
+          {
+            class: "btn recommend",
+            attrs: {
+              type: "button",
+              "aria-label": `Recommended puzzle: ${recPuzzle.title}, ${difficultyMeta(recPuzzle.difficulty).label}. ${rec.reason}`,
+            },
+            on: { click: () => navigate(`/play/${encodeURIComponent(rec.puzzleId)}`) },
+          },
+          [
+            el("span", { class: "rec-head", text: "🎯 Recommended puzzle" }),
+            el("span", { class: "rec-pick" }, [
+              el("span", { class: "rec-title", text: recPuzzle.title }),
+              el("span", {
+                class: `chip ${difficultyMeta(recPuzzle.difficulty).className}`,
+                text: difficultyMeta(recPuzzle.difficulty).label,
+              }),
+            ]),
+            el("span", { class: "rec-reason", text: rec.reason }),
+          ],
+        )
+      : null;
 
-  const pix = getPixelogicScore();
+  const pix = getClueweaveScore();
   const progressLine =
     completed.size > 0
       ? `${completed.size} of ${LIBRARY.length} solved`
@@ -192,7 +205,7 @@ export function renderMenu(host: HTMLElement): void {
     },
   });
 
-  // Header order (#2): brand → tagline → Pixelogic Score → actions, with the
+  // Header order (#2): brand → tagline → Clueweave Score → actions, with the
   // action buttons sitting close to the first section's divider line.
   const view = el("div", { class: "view menu" }, [
     el("div", { class: "menu-tools" }, [
@@ -205,7 +218,7 @@ export function renderMenu(host: HTMLElement): void {
       el("button", {
         class: "icon-btn",
         text: "ℹ",
-        attrs: { type: "button", "aria-label": "About Pixelogic", title: "About" },
+        attrs: { type: "button", "aria-label": "About Clueweave", title: "About" },
         on: { click: () => navigate("/about") },
       }),
       el("button", {
@@ -216,10 +229,10 @@ export function renderMenu(host: HTMLElement): void {
       }),
     ]),
     el("header", { class: "menu-header" }, [
-      el("div", { class: "brand" }, [el("span", { class: "logo", text: "▦" }), el("h1", { text: "Pixelogic" })]),
+      el("div", { class: "brand" }, [el("span", { class: "logo", text: "▦" }), el("h1", { text: "Clueweave" })]),
       el("p", { class: "tagline", text: progressLine }),
       el("div", { class: "score-block" }, [
-        el("div", { class: "pixelogic-score", attrs: { role: "group", "aria-label": `Pixelogic Score ${pix} of 1600` } }, [
+        el("div", { class: "clueweave-score", attrs: { role: "group", "aria-label": `Clueweave Score ${pix} of 1600` } }, [
           el("span", { class: "laurel", text: "🌿" }),
           el("div", { class: "score-core" }, [
             el("span", { class: "score-value", text: pix.toLocaleString() }),
@@ -232,7 +245,7 @@ export function renderMenu(host: HTMLElement): void {
       ]),
       el("div", { class: "menu-actions" }, [
         el("button", { class: "btn primary", text: "✏️ Create your own", on: { click: () => navigate("/editor") } }),
-        el("button", { class: "btn", text: "🎲 Surprise me", on: { click: () => navigate(`/play/${encodeURIComponent(surpriseId())}`) } }),
+        recommendBtn,
       ]),
     ]),
     ...sections.filter((s): s is HTMLElement => s !== null),

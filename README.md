@@ -1,10 +1,10 @@
-# Pixelogic
+# Clueweave
 
-A calm, friendly **nonogram** (picross) logic-puzzle game. Deduce the hidden
+A calm, friendly **nonogram** logic-puzzle game. Deduce the hidden
 pixel-art picture from the run-length number clues on each row and column — using
 nothing but logic.
 
-🎮 **Play:** https://website-and-game-maker.github.io/pixelogic/
+🎮 **Play:** https://website-and-game-maker.github.io/clueweave/
 
 ## Features
 - A library of hand-crafted puzzles across sizes (5×5 → 15×15) and difficulties.
@@ -19,7 +19,7 @@ TypeScript + Vite, tested with Vitest, deployed to GitHub Pages via GitHub Actio
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/pixelogic/
+npm run dev      # http://localhost:5173/clueweave/
 npm test
 npm run build
 ```

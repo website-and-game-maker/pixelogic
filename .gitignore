@@ -8,3 +8,7 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Claude Code local state (worktrees, session settings)
+.claude/
+node_modules 2

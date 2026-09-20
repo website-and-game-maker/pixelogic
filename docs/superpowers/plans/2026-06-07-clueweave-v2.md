@@ -1,8 +1,8 @@
-# Pixelogic v2 Implementation Plan
+# Clueweave v2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or executing-plans. Steps use checkbox (`- [ ]`) syntax. TDD for pure engine/persistence; smoke-test for UI.
 
-**Goal:** Deliver the 21-point v2: a 0–1,600 Pixelogic Score, per-puzzle scoring with tiered assist penalties, a 5-tier difficulty system with symmetry capping, larger/curated Extra Hard + Max content, slowed/explained watch-solve, a robust tutorial, richer sharing + link previews, and home/play UI for all of it.
+**Goal:** Deliver the 21-point v2: a 0–1,600 Clueweave Score, per-puzzle scoring with tiered assist penalties, a 5-tier difficulty system with symmetry capping, larger/curated Extra Hard + Max content, slowed/explained watch-solve, a robust tutorial, richer sharing + link previews, and home/play UI for all of it.
 
 **Architecture:** Pure, unit-tested engine modules (`scoring.ts`, `symmetry.ts`) feed DOM-free data into the existing view layer. Scoring/penalty state lives per play-attempt in `play.ts` and persists via `persistence.ts`. Difficulty becomes a 5-member union; symmetry caps grading. Content is hand-designed and engine-verified by `vite-node` scripts.
 
@@ -15,7 +15,7 @@
 ## File map
 
 - `src/engine/symmetry.ts` (new) — `detectSymmetry`, `isSymmetric`.
-- `src/engine/scoring.ts` (new) — par, per-puzzle score, Pixelogic score, weights, titles, penalty table.
+- `src/engine/scoring.ts` (new) — par, per-puzzle score, Clueweave score, weights, titles, penalty table.
 - `src/engine/types.ts` — add `"max"` to `Difficulty`.
 - `src/engine/grader.ts` — symmetry cap + max promotion.
 - `src/engine/deduce.ts` — readable proof captions.
@@ -25,7 +25,7 @@
 - `src/ui/scoreState.ts` (new) — per-attempt assist ledger (penalties, check budget, voided).
 - `src/ui/share.ts` — result/score/custom variants + reset disclosure.
 - `src/ui/views/play.ts` — assist UI, scoring, post-solve bar, symmetry footer.
-- `src/ui/views/menu.ts` — card score/time, Pixelogic header, Surprise adapt, mass delete, remove How-to-play btn, symmetry chip.
+- `src/ui/views/menu.ts` — card score/time, Clueweave header, Surprise adapt, mass delete, remove How-to-play btn, symmetry chip.
 - `src/ui/views/explainer.ts` — slower + speed control + readable captions.
 - `src/ui/views/tutorial.ts` — robust step engine.
 - `src/ui/settings.ts` — auto-check toggle copy.
@@ -78,7 +78,7 @@ export function puzzleScore(opts:{difficulty:Difficulty; area:number; bestTimeMs
   return Math.max(0, Math.min(100, Math.round(100*speed - penaltyTotal(opts.assists))));
 }
 export interface PuzzleMeta { id:string; difficulty:Difficulty; }
-export function pixelogicScore(best: Record<string,number>, library: PuzzleMeta[]): number {
+export function clueweaveScore(best: Record<string,number>, library: PuzzleMeta[]): number {
   let earned=0, possible=0;
   for (const p of library){ const w=DIFFICULTY_WEIGHT[p.difficulty]; possible+=w; earned += w*((best[p.id]??0)/100); }
   return possible? Math.round(1600*earned/possible) : 0;
@@ -86,7 +86,7 @@ export function pixelogicScore(best: Record<string,number>, library: PuzzleMeta[
 export function checkBudget(d: Difficulty): number { return d==="hard"?3 : d==="expert"?2 : d==="max"?1 : Infinity; }
 export function scoreTitle(s:number): string { /* bands: Novice<250, Apprentice<550, Solver<850, Sharp<1100, Expert<1350, Master<1500, Grandmaster>=1500 */ }
 ```
-- [ ] Tests: par values; perfect fast solve = 100; at-par = 100; 2×par ⇒ 50; penalties subtract; voided ⇒ 0; pixelogicScore weighting + 1600 cap; title bands; checkBudget per tier.
+- [ ] Tests: par values; perfect fast solve = 100; at-par = 100; 2×par ⇒ 50; penalties subtract; voided ⇒ 0; clueweaveScore weighting + 1600 cap; title bands; checkBudget per tier.
 - [ ] Implement; `tsc && vitest`; commit.
 
 ---
@@ -96,7 +96,7 @@ export function scoreTitle(s:number): string { /* bands: Novice<250, Apprentice<
 ### Task 1.1: scores + reset flag
 **Files:** `persistence.ts`, `tests/persistence.test.ts`.
 - [ ] Add `bestScores: Record<string,number>` and `progressReset: boolean` to `SaveData` + `defaultSaveData` + back-compat merge in `loadSave`.
-- [ ] `recordPuzzleScore(id, score)` keeps the max; `getPuzzleScore(id)`; `getPixelogicScore()` (uses `pixelogicScore(bestScores, LIBRARY)`); `resetProgress` also clears `bestScores` and sets `progressReset=true`.
+- [ ] `recordPuzzleScore(id, score)` keeps the max; `getPuzzleScore(id)`; `getClueweaveScore()` (uses `clueweaveScore(bestScores, LIBRARY)`); `resetProgress` also clears `bestScores` and sets `progressReset=true`.
 - [ ] Tests: defaults round-trip; record keeps max; reset clears + sets flag. `tsc && vitest`; commit.
 
 ---
@@ -144,7 +144,7 @@ export function scoreTitle(s:number): string { /* bands: Novice<250, Apprentice<
 
 - [ ] Remove "How to play" action button (#3).
 - [ ] Card: score badge top-left, best time top-right, title, difficulty + symmetry chips, size (#10, #11).
-- [ ] Pixelogic Score laurel header top-center with title band (#10).
+- [ ] Clueweave Score laurel header top-center with title band (#10).
 - [ ] Surprise me adapts to frontier tier (#4).
 - [ ] My Puzzles **Manage** mode → checkboxes, Delete selected, Delete all (#2).
 

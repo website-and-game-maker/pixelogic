@@ -1,5 +1,5 @@
 /* ============================================================
-   Pixelogic — design system
+   Clueweave — design system
    Fun-but-modern, baby-blue / turquoise. Spacing-first.
    ============================================================ */
 
@@ -1276,11 +1276,11 @@ button.cell {
 }
 
 /* ============================================================
-   v2 — Pixelogic Score, card score/time, symmetry, assists
+   v2 — Clueweave Score, card score/time, symmetry, assists
    ============================================================ */
 
-/* Pixelogic Score laurel header */
-.pixelogic-score {
+/* Clueweave Score laurel header */
+.clueweave-score {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
@@ -1291,12 +1291,12 @@ button.cell {
   box-shadow: var(--shadow);
   border: 1.5px solid var(--accent-soft);
 }
-.pixelogic-score .laurel {
+.clueweave-score .laurel {
   font-size: 2.1rem;
   line-height: 1;
   filter: hue-rotate(-12deg) saturate(0.85);
 }
-.pixelogic-score .laurel.flip {
+.clueweave-score .laurel.flip {
   transform: scaleX(-1);
 }
 .score-core {
@@ -1575,19 +1575,27 @@ button.cell {
   outline-offset: 1px;
 }
 
-/* Completed-clue styles (board-level data attribute set by render.ts) */
+/* Completed-clue styles (board-level data attribute set by render.ts).
+   Each style applies at two granularities: the whole line (.row-clue.done) and
+   a single finished number inside a chain (.clue-num.done), so "3 1 2" can grey
+   its 3 the moment that run is nailed down, long before the line is finished. */
 .board[data-clue-style="grey"] .row-clue.done .clue-num,
-.board[data-clue-style="grey"] .col-clue.done .clue-num {
+.board[data-clue-style="grey"] .col-clue.done .clue-num,
+.board[data-clue-style="grey"] .clue-num.done {
   color: var(--ink-soft);
 }
 .board[data-clue-style="strike"] .row-clue.done .clue-num,
-.board[data-clue-style="strike"] .col-clue.done .clue-num {
+.board[data-clue-style="strike"] .col-clue.done .clue-num,
+.board[data-clue-style="strike"] .clue-num.done {
   color: var(--ink-soft);
   text-decoration: line-through;
   text-decoration-thickness: 2px;
 }
+/* "Hide" fades a finished number rather than removing it, so the stack never
+   reflows and the remaining numbers stay where the player expects them. */
 .board[data-clue-style="hide"] .row-clue.done .clue-num,
-.board[data-clue-style="hide"] .col-clue.done .clue-num {
+.board[data-clue-style="hide"] .col-clue.done .clue-num,
+.board[data-clue-style="hide"] .clue-num.done {
   opacity: 0;
 }
 
@@ -1712,4 +1720,233 @@ button.cell {
 }
 .privacy-link:hover {
   color: var(--primary-deep);
+}
+
+/* ============================================================
+   Progression — bottom puzzle nav, smart-next, recommendation
+   ============================================================ */
+
+/* Level-to-level browsing. Deliberately unlike the solving buttons: a wide
+   bar pinned to the bottom of the view, separated by its own rule, so it
+   reads as "leave this puzzle" rather than "act on this puzzle". */
+.puzzle-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 2px dashed var(--line-major);
+}
+.nav-btn {
+  padding: 10px 20px;
+  border-radius: var(--r-sm);
+  border: 2px solid var(--line-major);
+  background: var(--bg-2);
+  color: var(--primary-deep);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.nav-btn:hover:not(:disabled) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.nav-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Greyed, not hidden — the end of the run should be visible, not mysterious. */
+.nav-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+.nav-position {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* The smart-next arrow: larger than its toolbar neighbours, and sheened while
+   it is actually choosing for you. Losing the sheen is the visible signal that
+   it has become an ordinary next button. */
+.icon-btn.smart-next {
+  width: 52px;
+  height: 52px;
+  font-size: 1.4rem;
+  font-weight: 900;
+  margin-left: var(--s1);
+}
+.icon-btn.smart-next.sheen {
+  position: relative;
+  overflow: hidden;
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  box-shadow: 0 6px 18px rgba(26, 185, 169, 0.42);
+}
+/* The shine parks off-screen and only sweeps on cue — once when the view
+   settles, and once per hover. A permanent loop reads as a spinner and pulls
+   the eye away from the board the whole time you're solving. */
+.icon-btn.smart-next.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+.icon-btn.smart-next.sheen.sheen-intro::after,
+.icon-btn.smart-next.sheen:hover::after {
+  animation: sheen-sweep 1.05s ease-out 1;
+}
+.icon-btn.smart-next.sheen:hover {
+  background: linear-gradient(135deg, var(--primary-deep) 0%, var(--primary) 100%);
+}
+@keyframes sheen-sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .icon-btn.smart-next.sheen.sheen-intro::after,
+  .icon-btn.smart-next.sheen:hover::after {
+    animation: none;
+  }
+}
+
+/* First-use explainer for the smart arrow */
+.smart-prompt { text-align: center; }
+.smart-pick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  font-size: 1.25rem;
+  margin-bottom: var(--s1);
+}
+.smart-reason {
+  font-weight: 800;
+  color: var(--primary-deep);
+  margin-bottom: var(--s2);
+}
+.smart-explain {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  max-width: 42ch;
+  margin: 0 auto var(--s3);
+}
+.smart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  justify-content: center;
+}
+
+/* Home "Recommended puzzle" — names its pick and its reasoning, so the
+   suggestion is legible instead of a dice roll. */
+.btn.recommend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 18px;
+  text-align: left;
+  line-height: 1.3;
+  border: 2px solid var(--primary-soft);
+  background: var(--surface);
+}
+.btn.recommend:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--bg-2);
+}
+.rec-head {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.rec-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.rec-title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--ink);
+}
+.rec-reason {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary-deep);
+}
+
+/* Symmetry legend (badge page) */
+.symmetry-legend {
+  max-width: 560px;
+  margin: 0 auto var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--symmetry-soft);
+  border-radius: var(--r);
+  border: 1.5px solid var(--line-major);
+}
+.symmetry-legend h3 {
+  margin: 0 0 2px;
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--ink);
+}
+.legend-intro {
+  margin: 0 0 var(--s2);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.legend-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px var(--s2);
+  align-items: baseline;
+}
+.legend-list dt {
+  font-weight: 900;
+  color: var(--primary-deep);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+}
+.legend-list dd {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+/* Settings: a titled group so the progression options read as one idea */
+.settings-group {
+  margin-top: var(--s3);
+  padding-top: var(--s2);
+  border-top: 2px solid var(--line);
+}
+.settings-group h3 {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--ink);
+}
+.group-desc {
+  margin: 0 0 var(--s2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.5;
 }

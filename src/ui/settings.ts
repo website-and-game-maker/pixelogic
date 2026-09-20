@@ -1,6 +1,21 @@
 import { el } from "./dom";
 import { openModal } from "./modal";
-import { getSettings, setSettings, resetProgress, type Settings, type ClueStyle } from "./persistence";
+import { SYMMETRY_LEGEND } from "../engine/badges";
+import {
+  defaultProgressionState,
+  HINT_STRUGGLE_THRESHOLD,
+  type FastSensitivity,
+  type StruggleSensitivity,
+} from "../engine/progression";
+import {
+  getSettings,
+  setSettings,
+  setProgression,
+  getProgression,
+  resetProgress,
+  type Settings,
+  type ClueStyle,
+} from "./persistence";
 
 type SettingKey = keyof Settings;
 
@@ -58,6 +73,39 @@ function selectRow(
   ]);
 }
 
+const TIER_LABEL: Record<string, string> = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+  expert: "Extra Hard",
+  max: "Max",
+};
+
+/** Shows what the model currently thinks, and lets the player wipe just that. */
+function progressionStatusRow(onChange?: () => void): HTMLElement {
+  const p = getProgression();
+  const label = el("span", {
+    class: "setting-desc",
+    text: `Currently aiming you at ${TIER_LABEL[p.workingTier] ?? p.workingTier}.`,
+  });
+  const reset = el("button", {
+    class: "btn small",
+    text: "Reset",
+    attrs: { type: "button" },
+    on: {
+      click: () => {
+        setProgression(defaultProgressionState());
+        label.textContent = `Currently aiming you at ${TIER_LABEL.easy}.`;
+        onChange?.();
+      },
+    },
+  });
+  return el("div", { class: "setting-row" }, [
+    el("div", { class: "setting-text" }, [el("span", { class: "setting-label", text: "Your level" }), label]),
+    reset,
+  ]);
+}
+
 export type SettingsScope = "home" | "game";
 
 /** Open the settings modal. `onChange` fires when any setting changes or progress is reset. */
@@ -91,6 +139,67 @@ export function openSettings(scope: SettingsScope, onChange?: () => void): void 
   ];
 
   const body = el("div", { class: "settings-body" }, rows);
+
+  // ---- Progression: how the game picks what you play next ----
+  body.append(
+    el("div", { class: "settings-group" }, [
+      el("h3", { text: "Picking your next puzzle" }),
+      el("p", {
+        class: "group-desc",
+        text: "The → button at the top right can choose for you, watching whether you're breezing through or getting stuck.",
+      }),
+      toggleRow(
+        "Smart next puzzle",
+        "The glowing → picks what suits you. Off makes it a plain next-in-order arrow.",
+        "smartNext",
+        settings.smartNext,
+        () => onChange?.(),
+      ),
+      toggleRow(
+        "Auto-adjust difficulty",
+        "Move up a level when you solve fast, and back down when you keep getting stuck.",
+        "autoAdjustDifficulty",
+        settings.autoAdjustDifficulty,
+        () => onChange?.(),
+      ),
+      selectRow(
+        "Move me up when",
+        "How quickly a run of fast, unassisted solves bumps you to the next level.",
+        [
+          { value: "relaxed", label: "I'm well ahead (3 in a row)" },
+          { value: "normal", label: "I'm comfortable (2 in a row)" },
+          { value: "eager", label: "I'm even slightly quick (2 in a row)" },
+        ],
+        settings.fastSensitivity,
+        (value) => {
+          setSettings({ fastSensitivity: value as FastSensitivity });
+          onChange?.();
+        },
+      ),
+      selectRow(
+        "Move me down when",
+        "How quickly giving up or leaning on help drops you back a level.",
+        [
+          { value: "forgiving", label: "I've struggled 3 times" },
+          { value: "normal", label: "I've struggled twice" },
+          { value: "quick", label: "I've struggled once" },
+        ],
+        settings.struggleSensitivity,
+        (value) => {
+          setSettings({ struggleSensitivity: value as StruggleSensitivity });
+          onChange?.();
+        },
+      ),
+      toggleRow(
+        "Count heavy hints as struggling",
+        `Using Check board, or ${HINT_STRUGGLE_THRESHOLD}+ hints on one puzzle, counts as a struggle.`,
+        "hintsCountAsStruggle",
+        settings.hintsCountAsStruggle,
+        () => onChange?.(),
+      ),
+      progressionStatusRow(onChange),
+    ]),
+  );
 
   if (scope === "home") {
     const dangerActions = el("div", { class: "danger-actions" });
@@ -141,6 +250,7 @@ export function openSettings(scope: SettingsScope, onChange?: () => void): void 
 /** Open the "How to play" rules modal. */
 export function openRules(): void {
   const body = el("div", { class: "rules-body" });
+  const symmetryRows = SYMMETRY_LEGEND.map((s) => `<li><code>${s.code}</code> — ${s.meaning}</li>`).join("");
   body.innerHTML = `
     <p>Each puzzle hides a picture. The numbers along every row and column tell you
     the lengths of the <strong>runs of filled cells</strong> in that line, in order.</p>
@@ -150,9 +260,16 @@ export function openRules(): void {
       <li>A clue like <code>3&nbsp;1</code> means a run of 3, then a gap, then a run of 1.</li>
       <li>A clue greys out once that line's filled cells match it (change the style in Settings).</li>
     </ul>
-    <p>Every Pixelogic puzzle has exactly one solution and can be reached by logic alone —
+    <p>Every Clueweave puzzle has exactly one solution and can be reached by logic alone —
     no guessing. Stuck? Use <strong>Hint</strong> for the next deduction, or
     <strong>Watch solve</strong> to see it worked out step by step.</p>
+    <h3>Reading the badges</h3>
+    <p>Chips under the title tell you how a puzzle will feel. <strong>◈ Symmetric</strong>
+    always carries a letter for <em>which way</em> the picture mirrors — that's the
+    <code>H</code> in <strong>◈ Symmetric · H</strong>:</p>
+    <ul>${symmetryRows}</ul>
+    <p><strong>🏷 Name-hint</strong> means the title gives the picture away;
+    <strong>▤ Patterned</strong> means every line is one solid run.</p>
   `;
   openModal({ title: "How to play", body, className: "rules-modal" });
 }

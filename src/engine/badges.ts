@@ -1,6 +1,6 @@
 // Puzzle badges: self-descriptive traits that hint at how a puzzle will feel to
 // solve. Badges that make a puzzle easier reduce how much it contributes to the
-// overall Pixelogic Score (per-puzzle 0–100 scores stay normalized); a badge
+// overall Clueweave Score (per-puzzle 0–100 scores stay normalized); a badge
 // with a multiplier above 1 would make a puzzle count for more.
 
 import type { Puzzle } from "./types";
@@ -12,7 +12,7 @@ export interface Badge {
   key: BadgeKey;
   /** Chip text, e.g. "◈ Symmetric · H+V". */
   label: string;
-  /** Weight applied to this puzzle's share of the Pixelogic Score. <1 = easier. */
+  /** Weight applied to this puzzle's share of the Clueweave Score. <1 = easier. */
   multiplier: number;
   /** One-line explanation shown on the badge's filter page. */
   blurb: string;
@@ -26,7 +26,7 @@ export const BADGE_INFO: Record<BadgeKey, { name: string; icon: string; multipli
     blurb: "The picture mirrors itself, so every deduction on one side gives you the other side for free.",
   },
   named: {
-    name: "Name hint",
+    name: "Name-hint",
     icon: "🏷",
     multiplier: 0.9,
     blurb: "The title tells you what you're drawing, so you can often guess where the picture is headed.",
@@ -63,6 +63,18 @@ export function detectPatterned(grid: boolean[][]): boolean {
   return true;
 }
 
+/**
+ * Plain-English meaning of every code the Symmetric chip can show. The chip is
+ * terse by necessity ("◈ Symmetric · H"), so this is the single source of truth
+ * the help surfaces read from — keep it in sync with `symmetryDetail` below.
+ */
+export const SYMMETRY_LEGEND: Array<{ code: string; meaning: string }> = [
+  { code: "H", meaning: "Mirrors left ↔ right. Fold it down the middle and the two halves match." },
+  { code: "V", meaning: "Mirrors top ↔ bottom. Fold it across the middle and the two halves match." },
+  { code: "H+V", meaning: "Mirrors both ways at once — left ↔ right and top ↔ bottom." },
+  { code: "180°", meaning: "No mirror, but turn the picture upside-down and you get the same picture." },
+];
+
 /** Human detail for the symmetric badge: which way the picture mirrors. */
 export function symmetryDetail(grid: boolean[][]): string | null {
   const s = detectSymmetry(grid);
@@ -97,7 +109,7 @@ export function puzzleBadges(puzzle: Pick<Puzzle, "solution" | "named">): Badge[
   return badges;
 }
 
-/** Combined Pixelogic-Score weight multiplier for a puzzle's badges. */
+/** Combined Clueweave-Score weight multiplier for a puzzle's badges. */
 export function badgeWeightMultiplier(badges: Badge[]): number {
   return badges.reduce((m, b) => m * b.multiplier, 1);
 }

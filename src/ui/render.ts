@@ -1,5 +1,5 @@
-import type { Clue } from "../engine/types";
-import { cluesForLine } from "../engine/clues";
+import { UNKNOWN, FILLED, EMPTY, type Cell, type Clue } from "../engine/types";
+import { cluesForLine, satisfiedClueParts } from "../engine/clues";
 import type { ClueStyle } from "./persistence";
 import { el } from "./dom";
 
@@ -32,14 +32,21 @@ export interface Board {
   destroy(): void;
 }
 
-function clueNumbers(clue: Clue): HTMLElement {
+/** The stack of numbers for one line, plus handles on each so individual
+ *  numbers can be greyed as the player finishes them. */
+function clueNumbers(clue: Clue): { wrap: HTMLElement; nums: HTMLElement[] } {
   const wrap = el("div", { class: "clue-stack" });
+  const nums: HTMLElement[] = [];
   if (clue.length === 0) {
     wrap.append(el("span", { class: "clue-num clue-zero", text: "0" }));
   } else {
-    for (const n of clue) wrap.append(el("span", { class: "clue-num", text: String(n) }));
+    for (const n of clue) {
+      const span = el("span", { class: "clue-num", text: String(n) });
+      wrap.append(span);
+      nums.push(span);
+    }
   }
-  return wrap;
+  return { wrap, nums };
 }
 
 /** Build a board element with aligned clues and a refreshable cell grid. */
@@ -58,20 +65,26 @@ export function createBoard(config: BoardConfig): Board {
 
   const colCluesEl = el("div", { class: "col-clues", style: { gridTemplateColumns: colsTemplate } });
   const colClueEls: HTMLElement[] = [];
+  const colNumEls: HTMLElement[][] = [];
   for (let c = 0; c < width; c++) {
-    const cell = el("div", { class: "col-clue", dataset: { c: String(c) } }, [clueNumbers(colClues[c])]);
+    const { wrap, nums } = clueNumbers(colClues[c]);
+    const cell = el("div", { class: "col-clue", dataset: { c: String(c) } }, [wrap]);
     if ((c + 1) % 5 === 0 && c + 1 < width) cell.classList.add("major-col");
     colCluesEl.append(cell);
     colClueEls.push(cell);
+    colNumEls.push(nums);
   }
 
   const rowCluesEl = el("div", { class: "row-clues", style: { gridTemplateRows: rowsTemplate } });
   const rowClueEls: HTMLElement[] = [];
+  const rowNumEls: HTMLElement[][] = [];
   for (let r = 0; r < height; r++) {
-    const cell = el("div", { class: "row-clue", dataset: { r: String(r) } }, [clueNumbers(rowClues[r])]);
+    const { wrap, nums } = clueNumbers(rowClues[r]);
+    const cell = el("div", { class: "row-clue", dataset: { r: String(r) } }, [wrap]);
     if ((r + 1) % 5 === 0 && r + 1 < height) cell.classList.add("major-row");
     rowCluesEl.append(cell);
     rowClueEls.push(cell);
+    rowNumEls.push(nums);
   }
 
   const cellsEl = el("div", {
@@ -150,17 +163,28 @@ export function createBoard(config: BoardConfig): Board {
     element.dataset.clueStyle = style;
     if (style !== "none") {
       for (let r = 0; r < height; r++) {
-        const filled = Array.from({ length: width }, (_, c) => config.getCell(r, c) === "filled");
+        const line = Array.from({ length: width }, (_, c) => cellState(config.getCell(r, c)));
+        const filled = line.map((s) => s === FILLED);
         rowClueEls[r].classList.toggle("done", clueEquals(cluesForLine(filled), rowClues[r]));
+        markParts(rowNumEls[r], satisfiedClueParts(line, rowClues[r]));
       }
       for (let c = 0; c < width; c++) {
-        const filled = Array.from({ length: height }, (_, r) => config.getCell(r, c) === "filled");
+        const line = Array.from({ length: height }, (_, r) => cellState(config.getCell(r, c)));
+        const filled = line.map((s) => s === FILLED);
         colClueEls[c].classList.toggle("done", clueEquals(cluesForLine(filled), colClues[c]));
+        markParts(colNumEls[c], satisfiedClueParts(line, colClues[c]));
       }
     } else {
       for (const node of rowClueEls) node.classList.remove("done");
       for (const node of colClueEls) node.classList.remove("done");
+      for (const nums of [...rowNumEls, ...colNumEls]) {
+        for (const n of nums) n.classList.remove("done");
+      }
     }
+  }
+
+  function markParts(nums: HTMLElement[], flags: boolean[]): void {
+    for (let i = 0; i < nums.length; i++) nums[i].classList.toggle("done", flags[i] === true);
   }
 
   fitCell();
@@ -179,6 +203,13 @@ export function createBoard(config: BoardConfig): Board {
 
 function clueEquals(a: Clue, b: Clue): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/** A rendered cell back into the tri-state the clue logic reasons about. An
+ *  un-marked cell is genuinely unknown — that's what stops a number greying
+ *  while its run could still shift. */
+function cellState(view: CellView): Cell {
+  return view === "filled" ? FILLED : view === "cross" ? EMPTY : UNKNOWN;
 }
 
 /** Trigger the staggered win reveal animation on a board. */

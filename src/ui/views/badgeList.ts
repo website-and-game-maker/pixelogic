@@ -4,7 +4,7 @@
 
 import type { Difficulty, Puzzle } from "../../engine/types";
 import { LIBRARY, DIFFICULTY_ORDER } from "../../engine/puzzles";
-import { puzzleBadges, BADGE_INFO, type BadgeKey } from "../../engine/badges";
+import { puzzleBadges, BADGE_INFO, SYMMETRY_LEGEND, type BadgeKey } from "../../engine/badges";
 import { el, mount } from "../dom";
 import { difficultyMeta } from "../format";
 import { libraryCard } from "../cards";
@@ -49,12 +49,31 @@ export function renderBadgeList(host: HTMLElement, key: BadgeKey): void {
       el("div", { class: "header-spacer" }),
     ]),
     el("p", { class: "badge-blurb", text: info.blurb }),
+    // The Symmetric chip is the only one with a code suffix, so spell the codes
+    // out right where the player is already looking at them.
+    key === "symmetric"
+      ? el("div", { class: "symmetry-legend" }, [
+          el("h3", { text: "Reading the chip" }),
+          el("p", {
+            class: "legend-intro",
+            text: "The letter after “Symmetric” says which way this picture mirrors:",
+          }),
+          el(
+            "dl",
+            { class: "legend-list" },
+            SYMMETRY_LEGEND.flatMap((s) => [
+              el("dt", { text: s.code }),
+              el("dd", { text: s.meaning }),
+            ]),
+          ),
+        ])
+      : null,
     el("p", {
       class: "badge-scoring-note",
       text:
         info.multiplier < 1
-          ? `Because they're a little easier, ${info.name} puzzles count slightly less toward your Pixelogic Score.`
-          : `Because they're harder, ${info.name} puzzles count for more in your Pixelogic Score.`,
+          ? `Because they're a little easier, ${info.name} puzzles count slightly less toward your Clueweave Score.`
+          : `Because they're harder, ${info.name} puzzles count for more in your Clueweave Score.`,
     }),
     ...sections,
     el("footer", { class: "menu-footer" }, [

@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
-const BASE = process.env.SMOKE_URL ?? "http://localhost:4173/pixelogic/";
-const SHOTS = process.env.SMOKE_SHOTS ?? "/tmp/pixelogic-shots";
+const BASE = process.env.SMOKE_URL ?? "http://localhost:4173/clueweave/";
+const SHOTS = process.env.SMOKE_SHOTS ?? "/tmp/clueweave-shots";
 mkdirSync(SHOTS, { recursive: true });
 
 const failures = [];
@@ -54,15 +54,15 @@ try {
   }
 
   const ctx = await browser.newContext({ viewport: { width: 1240, height: 1000 } });
-  await ctx.addInitScript((s) => { if (!localStorage.getItem("pixelogic.save.v1")) localStorage.setItem("pixelogic.save.v1", s); }, SEEN);
+  await ctx.addInitScript((s) => { if (!localStorage.getItem("clueweave.save.v1")) localStorage.setItem("clueweave.save.v1", s); }, SEEN);
   const page = await ctx.newPage();
   wire(page);
 
-  // =============== Menu / Pixelogic Score ===============
+  // =============== Menu / Clueweave Score ===============
   console.log("Menu:");
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".view.menu");
-  check("Pixelogic Score header present (0 to start)", (await page.textContent(".pixelogic-score .score-value"))?.trim() === "0");
+  check("Clueweave Score header present (0 to start)", (await page.textContent(".clueweave-score .score-value"))?.trim() === "0");
   check("Share-score button present", (await page.locator(".score-share").count()) === 1);
   check("How-to-play button removed from actions", (await page.locator(".menu-actions .btn:has-text('How to play')").count()) === 0);
   check("Surprise me present", (await page.locator(".menu-actions .btn:has-text('Surprise')").count()) === 1);
@@ -122,10 +122,10 @@ try {
   check("solving tools hidden after closing popup", await page.locator(".controls:not(.post-solve)").first().evaluate((e) => e.classList.contains("hidden")));
   await page.screenshot({ path: `${SHOTS}/05-post-solve.png`, fullPage: true });
 
-  // Pixelogic Score rose
+  // Clueweave Score rose
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".view.menu");
-  check("Pixelogic Score increased after a scored solve", (await page.textContent(".pixelogic-score .score-value"))?.trim() !== "0");
+  check("Clueweave Score increased after a scored solve", (await page.textContent(".clueweave-score .score-value"))?.trim() !== "0");
   check("solved card now shows a numeric score pill", (await page.locator(".puzzle-card .score-pill b").count()) >= 1);
 
   // Fill out voids the score
@@ -261,7 +261,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".view.menu");
-  check("mobile shows the Pixelogic Score", (await page.locator(".pixelogic-score").count()) === 1);
+  check("mobile shows the Clueweave Score", (await page.locator(".clueweave-score").count()) === 1);
   await page.screenshot({ path: `${SHOTS}/06-mobile.png`, fullPage: true });
   await page.goto(`${BASE}#/play/obsidian`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".board-cells");

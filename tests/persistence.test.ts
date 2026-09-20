@@ -8,7 +8,7 @@ import {
   getBestTime,
   recordPuzzleScore,
   getPuzzleScore,
-  getPixelogicScore,
+  getClueweaveScore,
   wasProgressReset,
   saveUserPuzzle,
   deleteUserPuzzle,
@@ -46,27 +46,50 @@ describe("persistence", () => {
 
   it("resets on corrupt JSON", () => {
     const s = memStore();
-    s.setItem("pixelogic.save.v1", "{not valid json");
+    s.setItem("clueweave.save.v1", "{not valid json");
     expect(loadSave(s)).toEqual(defaultSaveData());
   });
 
   it("migrates the old highlightClues boolean to clueStyle", () => {
     const s = memStore();
     const old = { ...defaultSaveData(), settings: { mistakeCheck: true, showTimer: true, highlightClues: false } };
-    s.setItem("pixelogic.save.v1", JSON.stringify(old));
+    s.setItem("clueweave.save.v1", JSON.stringify(old));
     const loaded = loadSave(s);
     expect(loaded.settings.clueStyle).toBe("none"); // false → no styling
     expect(loaded.settings.mistakeCheck).toBe(true); // other settings preserved
     expect(loaded.settings.autoCross).toBe(false); // new setting gets its default
 
     const oldOn = { ...defaultSaveData(), settings: { mistakeCheck: false, showTimer: true, highlightClues: true } };
-    s.setItem("pixelogic.save.v1", JSON.stringify(oldOn));
+    s.setItem("clueweave.save.v1", JSON.stringify(oldOn));
     expect(loadSave(s).settings.clueStyle).toBe("grey"); // true → default grey
+  });
+
+  it("adopts a pre-rebrand save and retires the old key", () => {
+    const s = memStore();
+    const old = defaultSaveData();
+    old.completed.push("heart");
+    s.setItem("pixelogic.save.v1", JSON.stringify(old));
+
+    expect(loadSave(s).completed).toEqual(["heart"]); // progress survives the rename
+    expect(s.getItem("clueweave.save.v1")).not.toBeNull(); // copied to the new key
+    expect(s.getItem("pixelogic.save.v1")).toBeNull(); // old key retired
+  });
+
+  it("prefers the current key over a stale pre-rebrand one", () => {
+    const s = memStore();
+    const legacy = defaultSaveData();
+    legacy.completed.push("heart");
+    const current = defaultSaveData();
+    current.completed.push("plus");
+    s.setItem("pixelogic.save.v1", JSON.stringify(legacy));
+    s.setItem("clueweave.save.v1", JSON.stringify(current));
+
+    expect(loadSave(s).completed).toEqual(["plus"]);
   });
 
   it("resets on a wrong version", () => {
     const s = memStore();
-    s.setItem("pixelogic.save.v1", JSON.stringify({ version: 99 }));
+    s.setItem("clueweave.save.v1", JSON.stringify({ version: 99 }));
     expect(loadSave(s)).toEqual(defaultSaveData());
   });
 
@@ -134,7 +157,7 @@ describe("persistence", () => {
     expect(data.settings.mistakeCheck).toBe(true); // kept
   });
 
-  it("records the best per-puzzle score and computes a Pixelogic Score", () => {
+  it("records the best per-puzzle score and computes a Clueweave Score", () => {
     const s = memStore();
     expect(getPuzzleScore("heart", s)).toBeUndefined();
     expect(wasProgressReset(s)).toBe(false);
@@ -145,8 +168,8 @@ describe("persistence", () => {
     expect(getPuzzleScore("heart", s)).toBe(95);
 
     // A real library id contributes to the overall rating (0 with nothing solved).
-    expect(getPixelogicScore(memStore())).toBe(0);
-    expect(getPixelogicScore(s)).toBeGreaterThan(0);
+    expect(getClueweaveScore(memStore())).toBe(0);
+    expect(getClueweaveScore(s)).toBeGreaterThan(0);
   });
 
   it("records only the fastest best time and reports new records", () => {

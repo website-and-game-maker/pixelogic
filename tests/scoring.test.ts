@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parSeconds,
   puzzleScore,
-  pixelogicScore,
+  clueweaveScore,
   penaltyTotal,
   emptyTally,
   checkBudget,
@@ -55,20 +55,20 @@ describe("puzzleScore", () => {
   });
 });
 
-describe("pixelogicScore", () => {
+describe("clueweaveScore", () => {
   const lib = [
     { id: "e", difficulty: "easy" as const },
     { id: "x", difficulty: "expert" as const },
   ];
   it("is 0 with nothing solved and 1600 with everything perfect", () => {
-    expect(pixelogicScore({}, lib)).toBe(0);
-    expect(pixelogicScore({ e: 100, x: 100 }, lib)).toBe(1600);
+    expect(clueweaveScore({}, lib)).toBe(0);
+    expect(clueweaveScore({ e: 100, x: 100 }, lib)).toBe(1600);
   });
   it("weights harder puzzles more", () => {
     // only the easy puzzle perfect: weight 1 of (1+7) => 1600*1/8 = 200
-    expect(pixelogicScore({ e: 100 }, lib)).toBe(200);
+    expect(clueweaveScore({ e: 100 }, lib)).toBe(200);
     // only the expert puzzle perfect: weight 7 of 8 => 1400
-    expect(pixelogicScore({ x: 100 }, lib)).toBe(1400);
+    expect(clueweaveScore({ x: 100 }, lib)).toBe(1400);
   });
   it("uses the documented weights", () => {
     expect(DIFFICULTY_WEIGHT).toEqual({ easy: 1, medium: 2, hard: 4, expert: 7, max: 12 });
@@ -79,9 +79,9 @@ describe("pixelogicScore", () => {
       { id: "x", difficulty: "expert" as const },
     ];
     // perfect everywhere is still a perfect 1600 (both sides scale together)
-    expect(pixelogicScore({ e: 100, x: 100 }, badged)).toBe(1600);
+    expect(clueweaveScore({ e: 100, x: 100 }, badged)).toBe(1600);
     // the badged easy is now 0.5 of 7.5 total → 1600*0.5/7.5 ≈ 107 (vs 200 unbadged)
-    expect(pixelogicScore({ e: 100 }, badged)).toBe(Math.round((1600 * 0.5) / 7.5));
+    expect(clueweaveScore({ e: 100 }, badged)).toBe(Math.round((1600 * 0.5) / 7.5));
   });
 });
 

@@ -1,7 +1,7 @@
 // Pure scoring model (DOM-free, unit-tested).
 //
 // Per-puzzle score (0–100):  round(100 × min(1, par/bestTime)) − assist penalties.
-// Pixelogic Score (0–1600):  difficulty-weighted average of best per-puzzle scores
+// Clueweave Score (0–1600):  difficulty-weighted average of best per-puzzle scores
 //                            across the whole library (a 1600 = perfect everywhere).
 
 import type { Difficulty } from "./types";
@@ -75,12 +75,12 @@ export interface PuzzleMeta {
 }
 
 /**
- * Overall Pixelogic Score in [0,1600]: a difficulty-weighted fraction of the
+ * Overall Clueweave Score in [0,1600]: a difficulty-weighted fraction of the
  * total possible score across `library`. Unsolved puzzles count as 0. Badge
  * multipliers shift how much each puzzle is worth relative to the others —
  * the perfect total stays 1600 because both sides scale together.
  */
-export function pixelogicScore(bestScores: Record<string, number>, library: PuzzleMeta[]): number {
+export function clueweaveScore(bestScores: Record<string, number>, library: PuzzleMeta[]): number {
   let earned = 0;
   let possible = 0;
   for (const p of library) {
@@ -105,7 +105,7 @@ export function checkBudget(difficulty: Difficulty): number {
   }
 }
 
-/** A flavour title for a Pixelogic Score, shown beneath the laurel. */
+/** A flavour title for a Clueweave Score, shown beneath the laurel. */
 export function scoreTitle(score: number): string {
   if (score >= 1500) return "Grandmaster";
   if (score >= 1350) return "Master";

@@ -1,4 +1,4 @@
-# Pixelogic v2 — Scoring, Difficulty, Assists & Polish
+# Clueweave v2 — Scoring, Difficulty, Assists & Polish
 
 Date: 2026-06-07
 Status: approved-in-principle (key model decisions confirmed by the user)
@@ -8,7 +8,7 @@ This spec turns the user's 21-point feedback list into a buildable design. It is
 
 ## Confirmed design decisions (from the user)
 
-1. **Pixelogic Score** is a *skill rating* on a **0–1,600** scale (SAT-style), derived from your
+1. **Clueweave Score** is a *skill rating* on a **0–1,600** scale (SAT-style), derived from your
    **best per-puzzle scores weighted by difficulty**. Mastering harder puzzles raises it most.
 2. **Per-puzzle score** (0–100) = `round(100 × min(1, par/bestTime)) − Σ penalties`, clamped 0–100.
 3. **Assist penalties are tiered by severity** (table below).
@@ -44,12 +44,12 @@ Only the **best** score per puzzle is kept (monotonic, like best time). Restart 
 
 Penalties accumulate during the current attempt; `Restart` resets them and the check budget.
 
-### Pixelogic Score (0–1,600)
+### Clueweave Score (0–1,600)
 ```
 weight = { easy:1, medium:2, hard:4, "extra-hard":7, max:12 }
 earned   = Σ over library puzzles ( weight_i × bestScore_i / 100 )
 possible = Σ over library puzzles ( weight_i )
-pixelogicScore = round(1600 × earned / possible)
+clueweaveScore = round(1600 × earned / possible)
 ```
 1,600 = a perfect 100 on every library puzzle. Unsolved puzzles count as 0 (it measures mastery of
 the whole library). Title bands: Novice <250, Apprentice, Solver, Sharp, Expert, Master, Grandmaster ≥1500.
@@ -132,7 +132,7 @@ Rewrite the step engine so it is impossible to get stuck:
   the hardest tier they've started, bumped one tier up if that tier is fully solved (clamped to Max).
   Fallbacks: any unsolved → any.
 - **#10 Card layout**: top-left **score badge**, top-right **best time**; title; then difficulty +
-  symmetry chips + size. **Pixelogic Score** sits **top-center of the home header** inside a
+  symmetry chips + size. **Clueweave Score** sits **top-center of the home header** inside a
   **laurel-wreath** motif (🌿 score 🌿 + title band), styled to fit the design system.
 - **#21 First-view redirect**: bare URL (no hash) shows the **menu** normally; only a *first-ever*
   visit (no save) shows the tutorial — without leaving the user stuck on `#/tutorial`. Verify the
@@ -142,9 +142,9 @@ Rewrite the step engine so it is impossible to get stuck:
 
 ## 8. Sharing — #16, #17, #20
 
-- **`share.ts`** grows variants: **puzzle result**, **Pixelogic Score**, **custom puzzle link**.
+- **`share.ts`** grows variants: **puzzle result**, **Clueweave Score**, **custom puzzle link**.
 - **#16** Persist a `progressReset` flag (set by Reset progress). Score shares **disclose** it
-  ("Pixelogic Score 1,240 · progress was reset").
+  ("Clueweave Score 1,240 · progress was reset").
 - **#20 Link previews**: add Open Graph + Twitter meta to `index.html` (`og:title`, `og:description`,
   `og:image`, `og:url`, `twitter:card=summary_large_image`). Ship a branded **`public/og-image.png`**
   (absolute URL under the Pages origin). Verify tags are present in the deployed HTML.
@@ -155,17 +155,17 @@ Rewrite the step engine so it is impossible to get stuck:
 
 Add to `SaveData` (back-compat merges, default `{}`/`false`): `bestScores: Record<string, number>`,
 `progressReset: boolean`. `resetProgress` clears scores/times/completion and **sets `progressReset=true`**.
-New helpers: `recordPuzzleScore(id, score)`, `getPuzzleScore(id)`, `getPixelogicScore()`. Unit-tested.
+New helpers: `recordPuzzleScore(id, score)`, `getPuzzleScore(id)`, `getClueweaveScore()`. Unit-tested.
 
 ---
 
 ## 10. Testing strategy (verification-before-completion)
 
-- **Unit (vitest)**: scoring math (par, per-puzzle, Pixelogic, weights, clamping), symmetry detection,
+- **Unit (vitest)**: scoring math (par, per-puzzle, Clueweave, weights, clamping), symmetry detection,
   grader symmetry cap + max tier, persistence (scores, reset flag), each new Max/Cat puzzle's
   uniqueness + logic-solvability + tier (via the existing library invariants test).
 - **E2E (Playwright `scripts/smoke.mjs`)**: extend to cover the new assist buttons + penalties,
-  post-solve bar + Next, score/time on cards, Pixelogic header, symmetry chip, mass-delete, surprise
+  post-solve bar + Next, score/time on cards, Clueweave header, symmetry chip, mass-delete, surprise
   adaptation, slowed watch-solve, OG tags, first-view behavior. Run against the **preview** build.
 - **Visual**: capture screenshots of every new surface and review them.
 - **Live**: re-run the smoke suite against the deployed Pages URL after deploy.

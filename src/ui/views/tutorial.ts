@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   {
     kind: "info",
     text:
-      "Welcome to Pixelogic! 👋 The numbers around the grid tell you the runs of filled cells in each row and column. Let's solve this little 5×5 together.",
+      "Welcome to Clueweave! 👋 The numbers around the grid tell you the runs of filled cells in each row and column. Let's solve this little 5×5 together.",
   },
   {
     kind: "fill",

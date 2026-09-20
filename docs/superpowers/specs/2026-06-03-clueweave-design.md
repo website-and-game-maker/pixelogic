@@ -1,10 +1,10 @@
-# Pixelogic — Design Spec
+# Clueweave — Design Spec
 
 _Date: 2026-06-03_
 
 ## 1. Concept
 
-Pixelogic is a **nonogram** (a.k.a. picross / griddler) logic-puzzle game that runs
+Clueweave is a **nonogram** logic-puzzle game that runs
 entirely in the browser. A nonogram is a grid where each row and column is labeled
 with a sequence of numbers giving the lengths of the consecutive runs of filled
 cells in that line. The player deduces — by pure logic — which cells are filled,
@@ -173,10 +173,10 @@ src/main.ts   entry point / app wiring + view routing
 
 ## 8. Deployment
 
-- Vite static build; `base = "/pixelogic/"`.
+- Vite static build; `base = "/clueweave/"`.
 - GitHub Actions (`.github/workflows/deploy.yml`) runs tests, builds, and publishes
   `dist/` to GitHub Pages on every push to `main`.
-- Live URL: **https://website-and-game-maker.github.io/pixelogic/**
+- Live URL: **https://website-and-game-maker.github.io/clueweave/**
 
 ## 9. Build order (high level)
 

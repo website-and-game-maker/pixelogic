@@ -1,9 +1,9 @@
 {
-  "name": "pixelogic",
+  "name": "clueweave",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Pixelogic — a nonogram (picross) logic-puzzle game with a rigorous solver, uniqueness-proving generator, and a custom puzzle editor.",
+  "description": "Clueweave — a nonogram logic-puzzle game with a rigorous solver, uniqueness-proving generator, and a custom puzzle editor.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

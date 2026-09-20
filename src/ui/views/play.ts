@@ -11,13 +11,26 @@ import { formatTime, difficultyMeta, sizeLabel } from "../format";
 import {
   loadSave,
   getSettings,
+  setSettings,
+  setProgression,
+  patchProgression,
   recordProgress,
   clearProgress,
   markCompleted,
   recordBestTime,
   recordPuzzleScore,
 } from "../persistence";
+import {
+  applySignal,
+  classifySignal,
+  curriculumNeighbour,
+  curriculumOrder,
+  shouldPromptSmartNext,
+  smartNextTarget,
+  type Recommendation,
+} from "../../engine/progression";
 import { ScoreState } from "../scoreState";
+import { openModal } from "../modal";
 import { openSettings, openRules } from "../settings";
 import { puzzleLink, shareResult } from "../share";
 import { navigate } from "../router";
@@ -35,7 +48,7 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
   const { fromLibrary, testReturn } = opts;
   const isTest = !!testReturn;
   const isCustomSaved = !fromLibrary && puzzle.id.startsWith("u-");
-  const scored = fromLibrary; // only built-in puzzles feed the Pixelogic Score
+  const scored = fromLibrary; // only built-in puzzles feed the Clueweave Score
   const badges = puzzleBadges(puzzle);
   const symmetricBadge = badges.find((b) => b.key === "symmetric");
   const area = puzzle.width * puzzle.height;
@@ -103,24 +116,54 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
       on: { click: () => navigate(`/badge/${b.key}`) },
     });
 
-  // Prev / next library navigation — works any time, solved or not (#8).
-  const libIndex = LIBRARY.findIndex((p) => p.id === puzzle.id);
-  const navTo = (offset: number): void => {
-    const next = LIBRARY[(libIndex + offset + LIBRARY.length) % LIBRARY.length];
-    navigate(`/play/${encodeURIComponent(next.id)}`);
+  // ---- navigation (docs/progression-model.md §6) ----
+  // Two deliberately different affordances:
+  //   • the bottom strip walks curriculum order — predictable, never wrapping,
+  //     greyed out at the ends, and it never consults or mutates the model;
+  //   • the sheened → at the top right asks the progression model what suits you.
+  const curriculum = curriculumOrder(LIBRARY);
+  const curIndex = fromLibrary ? curriculum.findIndex((p) => p.id === puzzle.id) : -1;
+  const inCurriculum = curIndex >= 0;
+  const prevId = inCurriculum ? curriculumNeighbour(LIBRARY, puzzle.id, -1) : null;
+  const nextId = inCurriculum ? curriculumNeighbour(LIBRARY, puzzle.id, 1) : null;
+
+  /** A bottom-strip arrow. Disabled (not hidden) at the ends so the wall is visible. */
+  const navBtn = (label: string, targetId: string | null, hint: string): HTMLElement => {
+    const btn = el("button", {
+      class: "nav-btn",
+      text: label,
+      attrs: { type: "button", "aria-label": hint, title: targetId ? hint : `${hint} — none` },
+      on: { click: () => targetId && navigate(`/play/${encodeURIComponent(targetId)}`) },
+    });
+    if (!targetId) btn.setAttribute("disabled", "");
+    return btn;
   };
-  const prevBtn = el("button", {
-    class: "icon-btn",
-    text: "←",
-    attrs: { type: "button", "aria-label": "Previous puzzle", title: "Previous puzzle" },
-    on: { click: () => navTo(-1) },
-  });
-  const nextNavBtn = el("button", {
-    class: "icon-btn",
+
+  const puzzleNav = inCurriculum
+    ? el("nav", { class: "puzzle-nav", attrs: { "aria-label": "Puzzle navigation" } }, [
+        navBtn("← Previous", prevId, "Previous puzzle"),
+        el("span", {
+          class: "nav-position",
+          text: `${curIndex + 1} of ${curriculum.length} · ${meta.label}`,
+        }),
+        navBtn("Next →", nextId, "Next puzzle"),
+      ])
+    : null;
+
+  // The smart-next arrow. Sheened while it is actually being smart.
+  const smartNextBtn = el("button", {
+    class: "icon-btn smart-next",
     text: "→",
-    attrs: { type: "button", "aria-label": "Next puzzle", title: "Next puzzle" },
-    on: { click: () => navTo(1) },
+    attrs: { type: "button" },
+    on: { click: onSmartNext },
   });
+  function refreshSmartNext(): void {
+    const on = settings.smartNext;
+    smartNextBtn.classList.toggle("sheen", on);
+    const label = on ? "Recommended next puzzle" : "Next puzzle";
+    smartNextBtn.setAttribute("aria-label", label);
+    smartNextBtn.setAttribute("title", on ? "Recommended next puzzle — picked for how you're doing" : label);
+  }
 
   const header = el("header", { class: "play-header" }, [
     backBtn,
@@ -134,11 +177,11 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
       ]),
     ]),
     el("div", { class: "play-tools" }, [
-      fromLibrary && libIndex >= 0 ? prevBtn : null,
-      fromLibrary && libIndex >= 0 ? nextNavBtn : null,
       rulesBtn,
       settingsBtn,
       timerWrap,
+      // Rightmost and larger than its neighbours — the one-tap "what next?".
+      inCurriculum ? smartNextBtn : null,
     ]),
   ]);
 
@@ -221,6 +264,8 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
     controls,
     postSolveBar,
     symmetryFooter,
+    // Level-to-level browsing lives at the very bottom, away from the solving tools.
+    puzzleNav,
     winOverlay,
   ]);
   mount(host, layout);
@@ -235,6 +280,7 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
     mistakeCheck = settings.mistakeCheck;
     boardConfig.satisfiedStyle = settings.clueStyle;
     timerWrap.classList.toggle("hidden", !settings.showTimer);
+    refreshSmartNext();
     board.refresh();
   }
 
@@ -429,6 +475,8 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
 
   function watchSolve(): void {
     if (scored) score.voidAttempt();
+    // Asking to be shown the answer is the clearest give-up signal there is.
+    recordAttemptSignal(false);
     navigate(`/explain/${encodeURIComponent(puzzle.id)}`);
   }
 
@@ -490,6 +538,10 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
       }
     }
 
+    // Teach the progression model what this attempt looked like, after the score
+    // is settled so the assist tally is final.
+    recordAttemptSignal(true);
+
     winNote.textContent = puzzle.note ? `ℹ ${puzzle.note}` : "";
     winOverlay.setAttribute("aria-label", filledOut ? "Puzzle filled out" : "Puzzle solved");
     winClose.setAttribute("aria-label", filledOut ? "Close" : "Close and admire the picture");
@@ -541,7 +593,7 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
   async function doShare(btn: HTMLElement): Promise<void> {
     const url = puzzleLink(puzzle, fromLibrary);
     const scoreBit = !filledOut && scored && lastScore ? ` (scored ${lastScore.value}/100)` : "";
-    const text = `I solved “${puzzle.title}” on Pixelogic in ${formatTime(state.elapsedMs())}${scoreBit}! ▦`;
+    const text = `I solved “${puzzle.title}” on Clueweave in ${formatTime(state.elapsedMs())}${scoreBit}! ▦`;
     const outcome = await shareResult(text, url);
     if (outcome === "copied") {
       const old = btn.textContent;
@@ -552,10 +604,100 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
     }
   }
 
+  /**
+   * The win popup's "Next puzzle →". Follows the progression model, so a string
+   * of solves walks forward through the curriculum instead of looping back to an
+   * Easy the way raw library order used to.
+   */
   function goNext(): void {
-    const idx = LIBRARY.findIndex((p) => p.id === puzzle.id);
-    const next = LIBRARY[(idx + 1) % LIBRARY.length];
-    navigate(`/play/${encodeURIComponent(next.id)}`);
+    const target = currentSmartTarget();
+    if (!target) {
+      navigate("/");
+      return;
+    }
+    navigate(`/play/${encodeURIComponent(target.puzzleId)}`);
+  }
+
+  function currentSmartTarget(): Recommendation | null {
+    const now = loadSave();
+    return smartNextTarget(
+      now.progression,
+      puzzle.id,
+      now.settings,
+      LIBRARY,
+      new Set(now.completed),
+      now.bestScores,
+    );
+  }
+
+  /** The sheened top-right arrow. */
+  function onSmartNext(): void {
+    const now = loadSave();
+    const target = currentSmartTarget();
+    if (!target) {
+      banner.textContent = "That's the last puzzle in the run — nothing after it.";
+      return;
+    }
+    // Each press counts toward the spam guard; any finished attempt clears it.
+    const updated = patchProgression({
+      smartNextUses: now.progression.smartNextUses + 1,
+      spamCount: now.progression.spamCount + 1,
+    });
+    const go = (): void => navigate(`/play/${encodeURIComponent(target.puzzleId)}`);
+    if (shouldPromptSmartNext(updated, now.settings)) openSmartNextPrompt(target, go);
+    else go();
+  }
+
+  /** On the first few uses, explain the pick and offer to turn the sheen off. */
+  function openSmartNextPrompt(target: Recommendation, proceed: () => void): void {
+    const pick = LIBRARY.find((p) => p.id === target.puzzleId);
+    const answer = (keepSmart: boolean): void => {
+      if (!keepSmart) setSettings({ smartNext: false });
+      patchProgression({ smartNextPrompted: true });
+      modal.close();
+      proceed();
+    };
+    const body = el("div", { class: "smart-prompt" }, [
+      el("p", { class: "smart-pick" }, [
+        el("strong", { text: pick?.title ?? "Next puzzle" }),
+        el("span", {
+          class: `chip ${difficultyMeta(target.tier).className}`,
+          text: difficultyMeta(target.tier).label,
+        }),
+      ]),
+      el("p", { class: "smart-reason", text: target.reason }),
+      el("p", {
+        class: "smart-explain",
+        text:
+          "This arrow picks your next puzzle from how you're going — moving you up a level when you solve quickly, and easing off when you keep getting stuck. You can change this any time in Settings.",
+      }),
+      el("div", { class: "smart-actions" }, [
+        el("button", { class: "btn primary", text: "Keep choosing for me", on: { click: () => answer(true) } }),
+        el("button", { class: "btn ghost", text: "Just go in order", on: { click: () => answer(false) } }),
+      ]),
+    ]);
+    const modal = openModal({ title: "Picked for you", body, className: "smart-prompt-modal" });
+  }
+
+  /**
+   * Fold this attempt's outcome into the progression model. Only built-in library
+   * puzzles teach it anything — custom and test-play puzzles are not graded.
+   */
+  function recordAttemptSignal(didSolve: boolean): void {
+    if (!fromLibrary) return;
+    const now = loadSave();
+    const signal = classifySignal(
+      {
+        solved: didSolve,
+        voided: filledOut || score.voided(),
+        assists: score.tally_(),
+        elapsedMs: state.elapsedMs(),
+        difficulty: puzzle.difficulty,
+        area,
+      },
+      now.settings,
+    );
+    setProgression(applySignal(signal, now.progression, now.settings, LIBRARY, new Set(now.completed)));
   }
 
   // ---- win-dialog keyboard a11y ----
@@ -599,7 +741,16 @@ export function renderPlay(host: HTMLElement, puzzle: Puzzle, opts: PlayOptions)
     if (!solved) timerEl.textContent = formatTime(state.elapsedMs());
   }, 500);
 
+  // One introductory sweep once the view has settled — enough to catch the eye
+  // on arrival without animating for the whole solve. The class is dropped when
+  // the sweep finishes so a later hover can replay it cleanly.
+  smartNextBtn.addEventListener("animationend", () => smartNextBtn.classList.remove("sheen-intro"));
+  const sheenTimer = window.setTimeout(() => {
+    if (settings.smartNext) smartNextBtn.classList.add("sheen-intro");
+  }, 650);
+
   return () => {
+    window.clearTimeout(sheenTimer);
     window.clearInterval(tick);
     document.removeEventListener("keydown", onWinKey);
     board.cellsEl.removeEventListener("pointerdown", onCheckClick, true);

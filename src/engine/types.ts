@@ -1,4 +1,4 @@
-// Core types for the Pixelogic logic engine. Pure data — no DOM, no side effects.
+// Core types for the Clueweave logic engine. Pure data — no DOM, no side effects.
 
 /** Tri-state cell used by the solver. */
 export const UNKNOWN = 0;

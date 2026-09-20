@@ -3,6 +3,7 @@
 
 import { el, mount } from "../dom";
 import { navigate } from "../router";
+import { BADGE_INFO, SYMMETRY_LEGEND } from "../../engine/badges";
 
 interface Section {
   icon: string;
@@ -10,11 +11,16 @@ interface Section {
   html: string;
 }
 
+/** The symmetry codes, rendered from the engine's legend so the two can't drift. */
+const symmetryRows = SYMMETRY_LEGEND.map(
+  (s) => `<li><code>${s.code}</code> — ${s.meaning}</li>`,
+).join("\n        ");
+
 const SECTIONS: Section[] = [
   {
     icon: "▦",
-    title: "What is Pixelogic?",
-    html: `<p>Pixelogic is a nonogram (picross) game: the numbers along each row and column
+    title: "What is Clueweave?",
+    html: `<p>Clueweave is a nonogram: a logic puzzle where the numbers along each row and column
       describe the runs of filled cells in that line, and from those clues alone you can
       reconstruct a hidden pixel picture. Our promise is simple: <strong>every puzzle can be
       finished with certain logic — never a guess.</strong></p>`,
@@ -53,9 +59,30 @@ const SECTIONS: Section[] = [
       going. The grader knows, and caps or discounts those puzzles accordingly.</p>`,
   },
   {
+    icon: "◈",
+    title: "What the chips on a puzzle mean",
+    html: `<p>Every puzzle wears a difficulty chip and, sometimes, one or more
+      <strong>badges</strong> — little self-descriptions of how the puzzle will feel to
+      solve. They're honest tells, not decoration, so each one also nudges how much the
+      puzzle counts toward your Clueweave Score.</p>
+      <ul>
+        <li><strong>${BADGE_INFO.symmetric.icon} Symmetric</strong> — ${BADGE_INFO.symmetric.blurb}</li>
+        <li><strong>${BADGE_INFO.named.icon} ${BADGE_INFO.named.name}</strong> — ${BADGE_INFO.named.blurb}</li>
+        <li><strong>${BADGE_INFO.patterned.icon} ${BADGE_INFO.patterned.name}</strong> — ${BADGE_INFO.patterned.blurb}</li>
+      </ul>
+      <p>The Symmetric badge always carries a letter telling you <em>which way</em> the
+      picture mirrors — that's the <code>H</code> in <strong>◈ Symmetric · H</strong>:</p>
+      <ul>
+        ${symmetryRows}
+      </ul>
+      <p>Think of <code>H</code> as a <em>horizontal flip</em> (left swaps with right) and
+      <code>V</code> as a <em>vertical flip</em> (top swaps with bottom). Whichever it is,
+      it's free information: solve one half and the mirror hands you the other.</p>`,
+  },
+  {
     icon: "🌿",
-    title: "The Pixelogic Score",
-    html: `<p>Your Pixelogic Score (0–1,600) measures mastery of the whole library. Each puzzle
+    title: "The Clueweave Score",
+    html: `<p>Your Clueweave Score (0–1,600) measures mastery of the whole library. Each puzzle
       contributes its best result, weighted by tier — a MAX puzzle moves your score roughly a
       dozen Easies' worth. Per puzzle, you score out of 100: solve at the puzzle's
       <strong>par time</strong> or faster with no help and it's a perfect 100; assists subtract
@@ -76,7 +103,7 @@ const SECTIONS: Section[] = [
   {
     icon: "🤖",
     title: "Built entirely with AI",
-    html: `<p>Every part of Pixelogic — even the idea itself — was conceived and written by
+    html: `<p>Every part of Clueweave — even the idea itself — was conceived and written by
       Anthropic's Claude, working in Claude Code: the concept, the logic engine and its
       uniqueness prover, the difficulty grader, the scoring model, the puzzle art, the test
       suites, this very page. No human wrote, designed, or directed any of it; there is no
@@ -90,7 +117,7 @@ export function renderAbout(host: HTMLElement): void {
     el("header", { class: "play-header" }, [
       el("button", { class: "btn ghost back-btn", text: "‹ Menu", on: { click: () => navigate("/") } }),
       el("div", { class: "play-title" }, [
-        el("h1", { text: "About Pixelogic" }),
+        el("h1", { text: "About Clueweave" }),
         el("div", { class: "play-sub" }, [el("span", { class: "chip muted", text: "How it all works" })]),
       ]),
       el("div", { class: "header-spacer" }),

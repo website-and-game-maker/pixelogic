@@ -20,7 +20,7 @@ export function appLink(): string {
   return `${location.origin}${location.pathname}`;
 }
 
-/** Share the player's overall Pixelogic Score, disclosing a progress reset (#16). */
+/** Share the player's overall Clueweave Score, disclosing a progress reset (#16). */
 export function shareScore(opts: {
   score: number;
   title: string;
@@ -29,7 +29,7 @@ export function shareScore(opts: {
   wasReset: boolean;
 }): Promise<ShareOutcome> {
   const resetNote = opts.wasReset ? " (progress was reset at least once)" : "";
-  const text = `My Pixelogic Score is ${opts.score.toLocaleString()}/1600 — ${opts.title} (${opts.solved}/${opts.total} solved)${resetNote}. ▦ Can you beat it?`;
+  const text = `My Clueweave Score is ${opts.score.toLocaleString()}/1600 — ${opts.title} (${opts.solved}/${opts.total} solved)${resetNote}. ▦ Can you beat it?`;
   return shareResult(text, appLink());
 }
 
@@ -38,7 +38,7 @@ export async function shareResult(text: string, url: string): Promise<ShareOutco
   const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
   if (typeof nav.share === "function") {
     try {
-      await nav.share({ title: "Pixelogic", text, url });
+      await nav.share({ title: "Clueweave", text, url });
       return "shared";
     } catch (err) {
       // AbortError == user dismissed the sheet; don't fall through to clipboard.
