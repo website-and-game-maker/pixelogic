@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+# Claude Code local state (worktrees, session settings)
+.claude/
+node_modules 2
