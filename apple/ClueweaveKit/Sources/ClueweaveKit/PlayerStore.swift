@@ -70,11 +70,16 @@ public struct InProgressAttempt: Codable, Sendable, Equatable {
     public var marks: [[UInt8]]
     public var elapsedMs: Int
     public var assists: AssistTally
+    /// When this attempt was last written. Optional so saves from before the
+    /// field existed decode untouched; "most recent attempt" falls back to the
+    /// distant past for those, which only ever costs a widget its first render.
+    public var updatedAt: Date?
 
-    public init(marks: Grid, elapsedMs: Int, assists: AssistTally) {
+    public init(marks: Grid, elapsedMs: Int, assists: AssistTally, updatedAt: Date? = Date()) {
         self.marks = marks.map { $0.map(\.rawValue) }
         self.elapsedMs = elapsedMs
         self.assists = assists
+        self.updatedAt = updatedAt
     }
 
     public var grid: Grid { marks.map { $0.map { Cell(rawValue: $0) ?? .unknown } } }
@@ -167,19 +172,51 @@ public final class PlayerStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private var cache: SaveData
 
-    /// The save blob, preferring the current key and adopting a legacy one if that
-    /// is all there is. Adoption copies it across so the old key stops mattering.
-    private static func readRaw(_ defaults: UserDefaults) -> Data? {
+    /// The save blob, preferring the current key in the destination suite and
+    /// adopting an older location if that is all there is. Adoption copies the
+    /// blob across and clears the source, so each legacy location matters once.
+    ///
+    /// Two migrations stack here, and they must run in this order:
+    ///  1. the **rebrand** — `pixelogic.save.v1` → `clueweave.save.v1`;
+    ///  2. the **App Group** — app-local `UserDefaults.standard` → the shared
+    ///     suite, needed because widgets run in their own process and cannot
+    ///     see app-local defaults at all.
+    ///
+    /// A player upgrading straight from the pre-rebrand build hits both, which
+    /// is why the fallback stores are searched under *both* keys.
+    static func readRaw(_ defaults: UserDefaults, fallbacks: [UserDefaults] = []) -> Data? {
+        func adopt(_ data: Data, from source: UserDefaults, key: String) -> Data {
+            defaults.set(data, forKey: storageKey)
+            if source !== defaults || key != storageKey { source.removeObject(forKey: key) }
+            return data
+        }
         if let current = defaults.data(forKey: storageKey) { return current }
-        guard let legacy = defaults.data(forKey: legacyStorageKey) else { return nil }
-        defaults.set(legacy, forKey: storageKey)
-        defaults.removeObject(forKey: legacyStorageKey)
-        return legacy
+        if let legacy = defaults.data(forKey: legacyStorageKey) {
+            return adopt(legacy, from: defaults, key: legacyStorageKey)
+        }
+        for source in fallbacks where source !== defaults {
+            if let current = source.data(forKey: storageKey) {
+                return adopt(current, from: source, key: storageKey)
+            }
+            if let legacy = source.data(forKey: legacyStorageKey) {
+                return adopt(legacy, from: source, key: legacyStorageKey)
+            }
+        }
+        return nil
     }
 
-    public init(defaults: UserDefaults = .standard) {
+    /// - Parameters:
+    ///   - defaults: where the save lives from now on. Apps pass
+    ///     `AppGroup.defaults` so widgets can read it.
+    ///   - migratingFrom: older locations to adopt a save from, once. Empty by
+    ///     default so a test fixture can never inherit the runner's own state —
+    ///     the apps opt in explicitly with `[.standard]`.
+    public init(
+        defaults: UserDefaults = AppGroup.defaults,
+        migratingFrom fallbacks: [UserDefaults] = []
+    ) {
         self.defaults = defaults
-        if let raw = Self.readRaw(defaults) {
+        if let raw = Self.readRaw(defaults, fallbacks: fallbacks) {
             if let decoded = try? JSONDecoder().decode(SaveData.self, from: raw) {
                 cache = decoded
             } else {
@@ -422,5 +459,47 @@ public final class PlayerStore: @unchecked Sendable {
         var d = data
         d.progression.smartNextPrompted = true
         data = d
+    }
+
+    // MARK: - Widgets & complications
+
+    /// The unfinished attempt a Continue widget should offer: the most recently
+    /// saved one whose puzzle still exists. `resolve` maps a saved id back to a
+    /// puzzle, so the caller decides whether custom/generated art counts.
+    public func latestContinue(resolve: (String) -> Puzzle?) -> ContinueSource? {
+        data.inProgress
+            .compactMap { id, attempt -> (Date, ContinueSource)? in
+                guard let puzzle = resolve(id) else { return nil }
+                return (
+                    attempt.updatedAt ?? .distantPast,
+                    ContinueSource(puzzle: puzzle, marks: attempt.grid, elapsedMs: attempt.elapsedMs)
+                )
+            }
+            // Saves written before `updatedAt` existed all tie at .distantPast;
+            // breaking those on id keeps the widget stable between refreshes
+            // instead of flickering between boards.
+            .sorted { a, b in a.0 == b.0 ? a.1.puzzle.id < b.1.puzzle.id : a.0 > b.0 }
+            .first?.1
+    }
+
+    public func widgetSnapshot(resolve: (String) -> Puzzle?, now: Date = Date()) -> WidgetSnapshot {
+        makeWidgetSnapshot(
+            library: library,
+            completed: data.completed,
+            bestScores: data.bestScores,
+            progression: data.progression,
+            continueFrom: latestContinue(resolve: resolve),
+            score: clueweaveScore,
+            now: now
+        )
+    }
+
+    /// Rebuild the snapshot and hand it to the widget processes. Cheap enough to
+    /// call at every checkpoint the save itself is written at.
+    @discardableResult
+    public func publishWidgetSnapshot(resolve: (String) -> Puzzle?, now: Date = Date()) -> WidgetSnapshot {
+        let snapshot = widgetSnapshot(resolve: resolve, now: now)
+        SnapshotStore.write(snapshot, to: defaults)
+        return snapshot
     }
 }

@@ -481,6 +481,167 @@ if let decoded = try? JSONDecoder().decode(SaveData.self, from: junk) {
     check(false, "save with a corrupt progression block still decodes")
 }
 
+// MARK: - Deep links (widgets and complications build these; the apps parse them)
+print("DeepLink:")
+
+func roundTrips(_ link: ClueweaveLink) -> Bool { parseClueweaveLink(link.url) == link }
+
+check(roundTrips(.home), "home link round-trips")
+check(roundTrips(.recommended), "recommended link round-trips")
+check(Difficulty.allCases.allSatisfy { roundTrips(.tier($0)) }, "every tier link round-trips")
+check(roundTrips(.resume("u-1a2b3c4d")), "resume link round-trips")
+check(roundTrips(.puzzle("plus")), "puzzle link round-trips")
+check(ClueweaveLink.tier(.expert).string == "clueweave://tier/expert",
+      "tier links use the raw value, not the display name")
+check(parseClueweaveLink("clueweave://TIER/Hard") == .tier(.hard), "link parsing is case-insensitive")
+check(parseClueweaveLink("clueweave://tier/legendary") == nil, "an unknown tier is refused")
+check(parseClueweaveLink("clueweave://resume/") == nil, "resume with no id is refused")
+check(parseClueweaveLink("https://example.com/") == nil, "an unrelated URL is refused")
+// The pre-existing share forms must keep working through the same front door.
+let sampleToken = encodePuzzle(grid(["#.", ".#"]), title: "Two")
+check(parseClueweaveLink("clueweave://p/\(sampleToken)") == .share(sampleToken),
+      "clueweave://p/<token> still parses as a share")
+check(parseClueweaveLink(webShareURL(forToken: sampleToken).absoluteString) == .share(sampleToken),
+      "the canonical web URL still parses as a share")
+
+// MARK: - Widget snapshot
+print("WidgetSnapshot:")
+
+let wsSolution = grid(["#.#", "...", "#.."])   // 3 filled cells
+var wsMarks: Grid = Array(repeating: Array(repeating: Cell.unknown, count: 3), count: 3)
+check(solveProgress(marks: wsMarks, solution: wsSolution) == (0, 3), "an untouched board is 0 of 3")
+wsMarks[0][0] = .filled
+wsMarks[1][1] = .filled                         // a wrong fill
+wsMarks[0][1] = .empty                          // a cross
+check(solveProgress(marks: wsMarks, solution: wsSolution) == (1, 3),
+      "only correctly filled cells count — crosses and mistakes do not")
+wsMarks[0][2] = .filled
+wsMarks[2][0] = .filled
+check(solveProgress(marks: wsMarks, solution: wsSolution) == (3, 3),
+      "progress reaches exactly 3 of 3 on a solved picture")
+
+let preview = BoardPreview(marks: wsMarks)
+check(preview.width == 3 && preview.height == 3 && preview.cells.count == 9, "preview is w×h chars")
+check(preview.grid == wsMarks, "preview round-trips the marks")
+check(BoardPreview(width: 3, height: 3, cells: "").cell(2, 2) == .unknown,
+      "a truncated preview reads as unknown, never a crash")
+
+// tierSuggestion: next unsolved in curriculum order, then most score left to win
+check(tierSuggestion(.easy, plib, [], [:])?.id == "e1", "tier suggestion starts at the first unsolved")
+check(tierSuggestion(.easy, plib, ["e1"], [:])?.id == "e2", "tier suggestion walks the tier")
+check(tierSuggestion(.easy, plib, ["e1", "e2"], ["e1": 100, "e2": 40])?.id == "e2",
+      "a finished tier suggests the puzzle with the most score left to win")
+check(tierSuggestion(.easy, plib, ["e1", "e2"], [:])?.id == "e1",
+      "ties in a finished tier keep the earlier curriculum index")
+check(tierSuggestion(.max, plib, [], [:]) == nil, "an empty tier suggests nothing")
+
+let wsSnap = makeWidgetSnapshot(
+    library: plib,
+    completed: ["e1"],
+    bestScores: ["e1": 80],
+    progression: ProgressionState(),
+    continueFrom: ContinueSource(puzzle: pz("m1", .medium), marks: wsMarks, elapsedMs: 42_000),
+    score: 1234
+)
+check(wsSnap.solved == 1 && wsSnap.total == 5, "snapshot counts the library")
+check(wsSnap.tiers.map(\.tier) == [.easy, .medium, .hard], "snapshot keeps only non-empty tiers, in order")
+check(wsSnap.tier(.easy)?.solved == 1 && wsSnap.tier(.easy)?.total == 2, "per-tier counts")
+check(wsSnap.tier(.easy)?.suggestionID == "e2", "per-tier suggestion rides along")
+check(wsSnap.continueEntry?.puzzleID == "m1" && wsSnap.continueEntry?.fraction == 1.0,
+      "the continue entry carries its own progress")
+check(wsSnap.recommendation?.puzzleID != "m1",
+      "the recommendation never points at the board you are already on")
+check(wsSnap.primaryLink == .resume("m1"), "a single-tap complication resumes when there is a board")
+check(WidgetSnapshot(recommendation: RecommendationSnapshot(
+        puzzleID: "e1", title: "E1", difficulty: .easy, reason: "x")).primaryLink == .puzzle("e1"),
+      "with no board it opens what to play next")
+check(WidgetSnapshot().primaryLink == .home, "with neither it just opens the app")
+
+// Encoding must survive a round trip, and a junk/partial snapshot must still render.
+if let enc = try? JSONEncoder().encode(wsSnap),
+   let dec = try? JSONDecoder().decode(WidgetSnapshot.self, from: enc) {
+    check(dec == wsSnap, "snapshot round-trips through JSON")
+} else {
+    check(false, "snapshot round-trips through JSON")
+}
+let partial = Data(#"{"solved":3,"workingTier":"nonsense","tiers":"junk"}"#.utf8)
+if let dec = try? JSONDecoder().decode(WidgetSnapshot.self, from: partial) {
+    check(dec.solved == 3 && dec.workingTier == .easy && dec.tiers.isEmpty,
+          "a partial snapshot decodes field-by-field instead of blanking the widget")
+} else {
+    check(false, "a partial snapshot still decodes")
+}
+
+// MARK: - Live Activity content state
+print("LiveActivity:")
+
+let laStart = Date(timeIntervalSince1970: 1_000_000)
+let running = PuzzleActivityState(
+    correct: 2, totalFilled: 8, runningSince: laStart, elapsedMs: 30_000, headline: "Hard")
+check(running.fraction == 0.25, "activity fraction is correct-over-filled")
+check(running.totalElapsedMs(at: laStart.addingTimeInterval(5)) == 35_000,
+      "elapsed folds banked time into the running stretch")
+check(running.timerStart == laStart.addingTimeInterval(-30),
+      "the timer is anchored back by the banked time so a resume shows the true total")
+let paused = PuzzleActivityState(correct: 2, totalFilled: 8, runningSince: nil, elapsedMs: 30_000)
+check(paused.totalElapsedMs(at: laStart.addingTimeInterval(600)) == 30_000, "a paused clock does not drift")
+check(paused.timerStart == nil, "a paused activity shows a frozen number, not a lying timer")
+let won = PuzzleActivityState(
+    correct: 8, totalFilled: 8, runningSince: laStart, elapsedMs: 90_000, isSolved: true)
+check(won.fraction == 1.0 && won.totalElapsedMs(at: .distantFuture) == 90_000 && won.timerStart == nil,
+      "a solved activity freezes at its final time")
+check(PuzzleActivityState(correct: 3, totalFilled: 0, elapsedMs: 0).fraction == 0,
+      "an empty picture can't divide by zero")
+
+// MARK: - App Group migration (widgets run in another process)
+print("AppGroup:")
+
+let suiteA = "clueweave.verify.local.\(UUID().uuidString)"
+let suiteB = "clueweave.verify.group.\(UUID().uuidString)"
+if let local = UserDefaults(suiteName: suiteA), let shared = UserDefaults(suiteName: suiteB) {
+    // A player upgrading straight from the pre-rebrand build: old key, old store.
+    var seed = SaveData()
+    seed.completed = ["plus"]
+    local.set(try! JSONEncoder().encode(seed), forKey: "pixelogic.save.v1")
+
+    let store = PlayerStore(defaults: shared, migratingFrom: [local])
+    check(store.isCompleted("plus"), "a pre-rebrand app-local save survives the move to the App Group")
+    check(shared.data(forKey: PlayerStore.storageKey) != nil, "the save now lives in the shared suite")
+    check(local.data(forKey: "pixelogic.save.v1") == nil, "the old location is cleared, so it migrates once")
+
+    // A save already in the shared suite must win over anything app-local.
+    var newer = SaveData()
+    newer.completed = ["heart"]
+    shared.set(try! JSONEncoder().encode(newer), forKey: PlayerStore.storageKey)
+    local.set(try! JSONEncoder().encode(seed), forKey: PlayerStore.storageKey)
+    let store2 = PlayerStore(defaults: shared, migratingFrom: [local])
+    check(store2.isCompleted("heart") && !store2.isCompleted("plus"),
+          "the shared save wins — migration never overwrites newer progress")
+
+    // Snapshot publishing: what the widgets will actually read.
+    let store3 = PlayerStore(defaults: shared, migratingFrom: [])
+    store3.saveInProgress(
+        InProgressAttempt(marks: wsMarks, elapsedMs: 5_000, assists: AssistTally(),
+                          updatedAt: Date(timeIntervalSince1970: 10)),
+        for: "older")
+    store3.saveInProgress(
+        InProgressAttempt(marks: wsMarks, elapsedMs: 9_000, assists: AssistTally(),
+                          updatedAt: Date(timeIntervalSince1970: 20)),
+        for: "newer")
+    let picked = store3.latestContinue(resolve: { pz($0, .medium) })
+    check(picked?.puzzle.id == "newer", "continue offers the most recently saved board")
+    check(store3.latestContinue(resolve: { _ in nil }) == nil,
+          "a saved board whose puzzle is gone is not offered")
+    store3.publishWidgetSnapshot(resolve: { id in puzzle(withID: id) ?? pz(id, .medium) })
+    check(SnapshotStore.read(from: shared)?.continueEntry?.puzzleID == "newer",
+          "publishing writes a snapshot the widget process can read")
+
+    UserDefaults.standard.removePersistentDomain(forName: suiteA)
+    UserDefaults.standard.removePersistentDomain(forName: suiteB)
+} else {
+    check(false, "test suites available for the App Group checks")
+}
+
 print("\n\(checks) checks, \(failures) failures")
 if failures > 0 {
     print("VERIFY FAIL")
