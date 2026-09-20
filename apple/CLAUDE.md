@@ -10,8 +10,12 @@ for iPhone, iPad, and Apple Watch. Free, offline, no ads, no accounts.
 | **Engine** | `ClueweaveKit/Sources/ClueweaveKit` | Pure, UI-free, `Sendable`, deterministic. **Shared by iOS and watch.** Solver, uniqueness prover, grader, badges, scoring, hints, generator, share codec, `PlayerStore`. |
 | **Verifier** | `ClueweaveKit/Sources/clueweave-verify` | Framework-free mirror of the test suite — runs with bare Command Line Tools (`swift run clueweave-verify`). |
 | **Engine tests** | `ClueweaveKit/Tests/ClueweaveKitTests` | Swift Testing; same checks as the verifier, runs under the Xcode toolchain. |
-| **iOS app** | `Apps/iOS` | SwiftUI iPhone + iPad. Uses `PlayerStore` (UserDefaults) via `AppModel`. |
+| **iOS app** | `Apps/iOS` | SwiftUI iPhone + iPad. Uses `PlayerStore` (App Group UserDefaults) via `AppModel`. |
 | **Watch app** | `Apps/Watch` | watchOS, its own UI + **watch-local `@AppStorage`** state (no `PlayerStore`, no sync). |
+| **iOS widgets** | `Apps/Widgets` | Home/Lock Screen widgets + the Live Activity. iOS 18. |
+| **Complications** | `Apps/WatchComplications` | Watch face complications. watchOS 11. |
+| **Widget UI** | `Apps/WidgetUI` | Shared by **both** extensions only — never an app target (it declares `Color(hex:)`, which both apps already have). |
+| **Activity attributes** | `Apps/Shared` | `ClueweaveActivityAttributes`, compiled into the iOS app **and** its widget extension. |
 | **Website** | **separate repo** (`website-and-game-maker/clueweave`, not in this checkout) | JS port of the same engine. Share codec + scoring must stay byte/numerically identical. |
 
 `project.yml` (XcodeGen) defines the iOS + watch targets; the watch app is embedded in
@@ -78,6 +82,22 @@ each gate must pass before the next.
    give each a **disjoint set of files** (no two touch the same file). Merge to `main`
    and push. Update `README.md`, `docs/AppStoreReadiness.md`, and the verifier's
    library/count checks when relevant.
+
+## Widgets, complications, Live Activity
+
+See **`docs/widgets-and-complications.md`** before touching any of it. The
+things that bite:
+
+- Widgets run in **another process** — they read `WidgetSnapshot` from the App
+  Group `group.com.clueweave.app`, never `SaveData`. Anything a widget shows has
+  to go through `PlayerStore.refreshWidgets()` (iOS) or
+  `WatchProgress.publishSnapshot()` (watch), which publish *and* reload.
+- Accessory families honour **one** `widgetURL` and ignore `Link` entirely.
+- Deep links go through `parseClueweaveLink`; add a case there, in `Route`/
+  `WatchRoute`, and in both `open(_:)` handlers, or a complication will build a
+  URL nothing answers.
+- The extensions' deployment targets (iOS 18 / watchOS 11) are **above** the
+  apps' on purpose.
 
 ## Guarantees the engine must keep (verified, not aspirational)
 

@@ -81,7 +81,10 @@ struct PlayView: View {
             if let smartTarget { smartPromptSheet(smartTarget) }
         }
         .onAppear { vm.setActive(true) }
-        .onDisappear { vm.setActive(false); vm.persistNow() }
+        // Leaving the screen ends the Live Activity; backgrounding (below) does
+        // not — a card on the Lock Screen while the app is in the background is
+        // the entire point of it.
+        .onDisappear { vm.setActive(false); vm.persistNow(); vm.stopLiveActivity() }
         .onChange(of: scenePhase) { phase in
             vm.setActive(phase == .active)
             if phase == .background { vm.persistNow() } // .inactive is transient — don't churn saves

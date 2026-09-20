@@ -265,4 +265,5 @@ enum Route: Hashable {
     case explainer(String)       // watch-solve for a library puzzle id
     case generator               // the puzzle generator screen
     case playGenerated(String)   // a saved generated puzzle id
+    case tier(Difficulty)        // one difficulty's shelf (widget/complication target)
 }

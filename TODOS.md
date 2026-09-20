@@ -81,6 +81,35 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ---
 
+## Widgets, complications & Live Activities — **written, NOT compiled**
+
+Design and rationale: `apple/docs/widgets-and-complications.md`.
+
+Shipped in this change:
+
+- **Engine (verifiable without Xcode)** — `AppGroup`, `DeepLink`,
+  `WidgetSnapshot` (+ `tierSuggestion`, `solveProgress`, `BoardPreview`),
+  `PuzzleActivityState`, and the `PlayerStore` App-Group migration. Mirrored in
+  `clueweave-verify` and `ClueweaveKitTests/WidgetTests.swift`.
+- **iOS** — Continue / Difficulty / Progress widgets, and a Live Activity
+  (Lock Screen, Dynamic Island, `.small` family for the watch mirror).
+- **watchOS** — launcher, Continue and per-difficulty complications; the watch
+  app gained resumable attempts (`clueweave.watch.attempt`) and path-based
+  routing, both of which the complications need.
+
+Two design calls worth re-litigating if they feel wrong:
+
+- **`tierSuggestion`**: first unsolved in curriculum order, else the puzzle with
+  the most score left to win (same gain formula as `recommend()`'s last branch).
+- **Watch rectangular fallback**: continue → recommendation → app name. Never
+  blank: rectangular is the most valuable slot on the face.
+
+- [!] **Not built.** No Swift toolchain was available on the machine this was
+      written on (Linux). `swift run clueweave-verify`, `swift test`,
+      `xcodegen generate` and `xcodebuild` have all **not** been run against
+      it. The engine half is fully covered by checks and should be run first;
+      the WidgetKit/ActivityKit UI has no cover at all and needs a real build.
+
 ## Blockers
 
 **Xcode 26.6 is installed but its first-launch system components are not.**

@@ -34,8 +34,22 @@ struct WatchPlayView: View {
         self.puzzle = puzzle
         self.progress = progress
         let s = GameSession(puzzle: puzzle)
+        // Restore an unfinished board, so the Continue complication actually
+        // continues something. Without this the wrist app would reopen a blank
+        // grid and the ring on the face would be a lie.
+        if let saved = progress.savedMarks(for: puzzle) {
+            s.restore(marks: saved.marks, elapsedMs: saved.elapsedMs, assists: AssistTally())
+        }
         _session = State(initialValue: s)
         _marks = State(initialValue: s.marks)
+        _elapsedMs = State(initialValue: s.elapsedMs)
+    }
+
+    /// Write the board to wrist-local storage and republish the complication
+    /// snapshot. Called at checkpoints only (leaving, wrist down), never per tap.
+    private func persist() {
+        guard !won else { return }
+        progress.saveAttempt(puzzleID: puzzle.id, marks: session.marks, elapsedMs: session.elapsedMs)
     }
 
     var body: some View {
@@ -105,7 +119,13 @@ struct WatchPlayView: View {
                 // .inactive / .background: wrist down, Control Center, app switch.
                 session.pause()
                 elapsedMs = session.elapsedMs
+                persist()
             }
+        }
+        .onDisappear {
+            guard !won else { return }
+            session.pause()
+            persist()
         }
     }
 
@@ -114,6 +134,7 @@ struct WatchPlayView: View {
         finalMs = session.elapsedMs
         elapsedMs = finalMs
         won = true
+        // markCompleted clears the saved attempt and republishes the snapshot.
         progress.markCompleted(puzzle.id)
         playSuccess()
     }

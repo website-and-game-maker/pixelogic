@@ -10,6 +10,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
     @AppStorage("clueweave.ios.highVisibility") private var highVisibility = false
+    // Platform-local, like highVisibility — Live Activities are an iOS surface,
+    // so this must not enter the cross-platform GameSettings contract.
+    @AppStorage(LiveActivityController.settingKey) private var liveActivity = true
 
     var body: some View {
         NavigationStack {
@@ -44,6 +47,13 @@ struct SettingsView: View {
                     Text("Picking your next puzzle")
                 } footer: {
                     Text("The → button at the top right can choose for you, watching whether you're breezing through or getting stuck. Turn Smart next off to make it a plain next-in-order arrow.")
+                }
+                Section {
+                    Toggle("Live Activity while playing", isOn: $liveActivity)
+                } header: {
+                    Text("Lock Screen & widgets")
+                } footer: {
+                    Text("Shows the board you're solving on the Lock Screen and in the Dynamic Island, with a live timer — and mirrors it to a paired Apple Watch. It starts once you make your first mark and ends when you finish or put the puzzle down.")
                 }
                 Section {
                     Toggle("High-visibility board", isOn: $highVisibility)
@@ -90,6 +100,9 @@ struct SettingsView: View {
                 Button("Yes, reset", role: .destructive) {
                     app.store.resetProgress()
                     app.objectWillChange.send()
+                    // Otherwise every widget and complication keeps showing the
+                    // progress the player just asked to erase.
+                    app.refreshWidgets()
                 }
             }
         }

@@ -14,10 +14,19 @@ ClueweaveKit/        SwiftPM package — the whole game engine (pure, UI-free)
   Tests/                    the same checks as Swift Testing suites (Xcode)
 Apps/iOS/            SwiftUI app for iPhone + iPad (web look, translated)
 Apps/Watch/          watchOS app — redesigned for the wrist (see DESIGN.md)
+Apps/Widgets/        iOS widgets + the Live Activity (iOS 18)
+Apps/WatchComplications/  watch face complications (watchOS 11)
+Apps/WidgetUI/       views shared by BOTH extensions (never an app target)
+Apps/Shared/         Live Activity attributes — iOS app + its widget extension
 Support/             Privacy manifest, app icon, Info.plist sources
-docs/                App Store readiness audit
-project.yml          XcodeGen definition (iOS + watchOS targets)
+docs/                App Store readiness audit, widget/complication design
+project.yml          XcodeGen definition (apps + widget extensions)
 ```
+
+Widgets, complications and the Live Activity are documented in
+[`docs/widgets-and-complications.md`](docs/widgets-and-complications.md) —
+read it before changing any of them. They share the App Group
+`group.com.clueweave.app`, which is also where the save now lives.
 
 ## Build & verify
 

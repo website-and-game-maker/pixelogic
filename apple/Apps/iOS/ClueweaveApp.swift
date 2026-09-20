@@ -5,7 +5,10 @@ import ClueweaveKit
 
 @MainActor
 final class AppModel: ObservableObject {
-    let store = PlayerStore()
+    /// The save lives in the App Group so the widget and complication
+    /// processes can read it; anything still in app-local defaults (any build
+    /// before widgets shipped, under either brand name) is adopted once.
+    let store = PlayerStore(defaults: AppGroup.defaults, migratingFrom: [.standard])
     @Published var path = NavigationPath()
     @Published var showSettings = false
     @Published var showTutorial = false
@@ -25,6 +28,8 @@ final class AppModel: ObservableObject {
     func deleteUserPuzzles(ids: Set<String>) {
         store.deleteUserPuzzles(ids: ids)
         objectWillChange.send()
+        // A Continue widget may have been pointing at one of these.
+        refreshWidgets()
     }
 
     @discardableResult
@@ -44,6 +49,7 @@ final class AppModel: ObservableObject {
     func deleteGenerated(ids: Set<String>) {
         store.deleteGeneratedPuzzles(ids: ids)
         objectWillChange.send()
+        refreshWidgets()
     }
 
     // MARK: - Progression (docs/progression-model.md)
@@ -83,6 +89,54 @@ final class AppModel: ObservableObject {
             ?? store.userPuzzles.first(where: { $0.id == id })?.asPuzzle
             ?? store.generatedPuzzles.first(where: { $0.id == id })?.asPuzzle
     }
+
+    // MARK: - Deep links (widgets, complications, shared links)
+
+    /// Which play screen a bare puzzle id belongs on.
+    func playRoute(for id: String) -> Route? {
+        if ClueweaveKit.puzzle(withID: id) != nil { return .play(id) }
+        if store.userPuzzles.contains(where: { $0.id == id }) { return .playCustom(id) }
+        if store.generatedPuzzles.contains(where: { $0.id == id }) { return .playGenerated(id) }
+        return nil
+    }
+
+    /// Route a link. Shared-puzzle links are NOT handled here — they have to
+    /// validate the token asynchronously first (see `ClueweaveApp.open`).
+    func open(_ link: ClueweaveLink) {
+        // Whatever is covering the stack, the player asked for somewhere else.
+        showTutorial = false
+        showTour = false
+        showSettings = false
+
+        func go(_ route: Route?) {
+            path = NavigationPath()
+            if let route { path.append(route) }
+        }
+
+        switch link {
+        case .home, .share:
+            go(nil)
+        case .tier(let tier):
+            go(.tier(tier))
+        case .puzzle(let id):
+            // An id that no longer resolves (a deleted custom puzzle behind a
+            // stale widget) lands on the menu rather than a blank screen.
+            go(playRoute(for: id))
+        case .resume(let id):
+            // A stale Continue widget must not silently start a fresh board the
+            // player never asked to restart — that is the whole reason `resume`
+            // is a separate case from `puzzle`.
+            guard store.inProgress(for: id) != nil else { go(nil); return }
+            go(playRoute(for: id))
+        case .recommended:
+            let pick = recommend(
+                store.progression, library, store.data.completed, store.data.bestScores)
+            go(pick.flatMap { playRoute(for: $0.puzzleID) })
+        }
+    }
+
+    /// Republish the widget snapshot. Call after anything a widget shows changes.
+    func refreshWidgets() { store.refreshWidgets() }
 }
 
 @main
@@ -131,6 +185,12 @@ struct ClueweaveApp: App {
                 TourView().environmentObject(app)
             }
             .onAppear {
+                // A Live Activity outlives a force-quit, and there is no attempt
+                // behind it any more — clear strays before anything else.
+                LiveActivityController.shared.endStrays()
+                // Publish once per launch so a face added while the app was
+                // closed fills in, even if nothing changes this session.
+                app.refreshWidgets()
                 // First-ever launch: show the tutorial before the menu — unless a
                 // deep link has already pushed a puzzle (path non-empty).
                 if !app.store.tutorialSeen && app.path.isEmpty { app.showTutorial = true }
@@ -141,7 +201,7 @@ struct ClueweaveApp: App {
                 }
             }
             .onOpenURL { url in
-                openSharedPuzzle(url)
+                open(url)
             }
             .alert("Couldn’t open that puzzle", isPresented: Binding(
                 get: { app.importError != nil },
@@ -154,10 +214,24 @@ struct ClueweaveApp: App {
         }
     }
 
+    /// Every inbound URL: widget and complication taps, and shared links.
+    private func open(_ url: URL) {
+        guard let link = parseClueweaveLink(url) else {
+            app.importError = "That link isn’t a Clueweave puzzle."
+            return
+        }
+        // Shared puzzles need the token decoded and proved unique first; the
+        // rest are plain navigation and happen immediately.
+        if case .share(let token) = link {
+            openSharedPuzzle(token: token)
+        } else {
+            app.open(link)
+        }
+    }
+
     /// clueweave://p/<token> (and the web URL form) → validate, import & play.
-    private func openSharedPuzzle(_ url: URL) {
-        guard let token = shareToken(fromUserInput: url.absoluteString),
-              let decoded = try? decodePuzzle(token) else {
+    private func openSharedPuzzle(token: String) {
+        guard let decoded = try? decodePuzzle(token) else {
             app.importError = "That link isn’t a Clueweave puzzle."
             return
         }
@@ -175,6 +249,7 @@ struct ClueweaveApp: App {
             let id = app.importPuzzle(title: decoded.title, solution: decoded.solution)
             app.path = NavigationPath()
             app.path.append(Route.playCustom(id))
+            app.refreshWidgets()   // the new puzzle changes what Continue can resolve
         }
     }
 
@@ -207,6 +282,8 @@ struct ClueweaveApp: App {
             if let stored = app.store.generatedPuzzles.first(where: { $0.id == id }) {
                 PlayView(puzzle: stored.asPuzzle, isLibrary: false, store: app.store)
             }
+        case .tier(let tier):
+            TierView(tier: tier)
         }
     }
 }

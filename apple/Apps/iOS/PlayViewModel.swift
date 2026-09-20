@@ -48,6 +48,20 @@ final class PlayViewModel: ObservableObject {
 
     private var ticker: AnyCancellable?
 
+    // MARK: - Live Activity clock
+    //
+    // The Live Activity draws its timer with `Text(timerInterval:)`, which needs
+    // a wall-clock anchor rather than a number — that is how it keeps counting
+    // while the app is suspended. So the running stretch is tracked separately
+    // from `GameSession`'s own total: `bankedMs` is everything before
+    // `runningSince`, and total = banked + (now − runningSince). Both are
+    // re-stamped together, from the session's own clock, so they can't drift.
+    private var runningSince: Date?
+    private var bankedMs = 0
+    /// True once the player has actually marked something. Opening a puzzle to
+    /// look at it should not put a card on someone's Lock Screen.
+    private var activityStarted = false
+
     init(puzzle: Puzzle, isLibrary: Bool, store: PlayerStore) {
         self.puzzle = puzzle
         self.isLibrary = isLibrary
@@ -64,6 +78,7 @@ final class PlayViewModel: ObservableObject {
         self.voided = session.assists.voided
         self.elapsedMs = session.elapsedMs
         session.start()
+        markClockRunning()
         ticker = Timer.publish(every: 0.5, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -175,7 +190,11 @@ final class PlayViewModel: ObservableObject {
         banner = nil
         armedCheck = nil
         if let key = persistKey { store.clearInProgress(for: key) }
+        // A wiped board is not the attempt the Lock Screen card was tracking.
+        stopLiveActivity()
+        markClockRunning()
         sync()
+        store.refreshWidgets()
     }
 
     /// Scene-phase / navigation hook: pause or resume the clock when play leaves
@@ -184,12 +203,77 @@ final class PlayViewModel: ObservableObject {
         guard !solved else { return }
         if active { session.start() } else { session.pause() }
         elapsedMs = session.elapsedMs
+        if active { markClockRunning() } else { markClockPaused() }
+        // Forced: a paused clock that keeps ticking on the Lock Screen is a lie,
+        // and it is exactly the moment a player looks at the Lock Screen.
+        LiveActivityController.shared.update(activityState(), force: true)
     }
 
     /// Snapshot the unfinished attempt. Called only at real checkpoints
     /// (navigating away, app backgrounding) — never per touch — so a full
     /// SaveData encode can't run dozens of times mid-drag.
-    func persistNow() { persistProgress() }
+    func persistNow() {
+        persistProgress()
+        store.refreshWidgets()
+    }
+
+    /// Leaving the board for good: the attempt is saved, so the Live Activity
+    /// has nothing left to track. (Backgrounding is `setActive(false)`, which
+    /// keeps it — that is the case the Lock Screen exists for.)
+    func stopLiveActivity() {
+        guard activityStarted else { return }
+        activityStarted = false
+        LiveActivityController.shared.end(activityState(), showResult: solved)
+    }
+
+    // MARK: - Live Activity
+
+    private func markClockRunning() {
+        bankedMs = session.elapsedMs
+        runningSince = Date()
+    }
+
+    private func markClockPaused() {
+        bankedMs = session.elapsedMs
+        runningSince = nil
+    }
+
+    private func activityState(headline: String? = nil) -> PuzzleActivityState {
+        let progress = solveProgress(marks: session.marks, solution: puzzle.solution)
+        return PuzzleActivityState(
+            correct: progress.correct,
+            totalFilled: progress.total,
+            runningSince: solved ? nil : runningSince,
+            elapsedMs: solved ? session.elapsedMs : bankedMs,
+            isSolved: solved,
+            penalty: session.assists.penaltyTotal,
+            headline: headline ?? (solved ? "Solved! 🎉" : puzzle.difficulty.displayName)
+        )
+    }
+
+    /// Start the activity on the first real mark, then keep it fed. The
+    /// controller throttles the pushes; this just tells it the truth.
+    ///
+    /// Runs at the tail of every `sync()`, including the one that detected the
+    /// win — so the finished states have to be checked first, or ending the
+    /// activity on a solve would immediately start a fresh one.
+    private func syncLiveActivity() {
+        if solved || filledOut || voided {
+            if activityStarted {
+                activityStarted = false
+                LiveActivityController.shared.end(activityState(), showResult: solved)
+            }
+            return
+        }
+        if !activityStarted {
+            let touched = session.marks.contains { row in row.contains { $0 != .unknown } }
+            guard touched else { return }
+            activityStarted = true
+            LiveActivityController.shared.start(puzzle: puzzle, state: activityState())
+            return
+        }
+        LiveActivityController.shared.update(activityState())
+    }
 
     // MARK: - Sync + win
 
@@ -204,6 +288,7 @@ final class PlayViewModel: ObservableObject {
         checkSquaresLeft = session.checkSquaresLeft
         elapsedMs = session.elapsedMs
         if !solved && session.isSolved { handleWin() }
+        syncLiveActivity()
     }
 
     private func persistProgress() {
@@ -242,6 +327,10 @@ final class PlayViewModel: ObservableObject {
         // After the score is settled, so the assist tally is final.
         recordAttemptSignal(solved: true)
         showWinSheet = true
+        // The Live Activity is closed out by `syncLiveActivity()`, which runs
+        // at the tail of the same `sync()` that got us here — and leaves the
+        // win on the Lock Screen for a beat.
+        store.refreshWidgets()
     }
 
     /// Share text for the result (mirrors the web copy).
