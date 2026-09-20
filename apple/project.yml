@@ -1,0 +1,86 @@
+# XcodeGen project definition. Generate the Xcode project with:
+#   brew install xcodegen   (once)
+#   xcodegen generate
+# then open Clueweave.xcodeproj. Requires full Xcode for iOS/watchOS builds.
+
+name: Clueweave
+options:
+  bundleIdPrefix: com.clueweave
+  deploymentTarget:
+    iOS: "16.0"
+    watchOS: "9.0"
+  createIntermediateGroups: true
+
+packages:
+  ClueweaveKit:
+    path: ClueweaveKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""        # set your team in Xcode → Signing & Capabilities
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Clueweave:
+    type: application
+    platform: iOS
+    supportedDestinations: [iOS]    # iPhone + iPad (universal)
+    sources:
+      - Apps/iOS
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: ClueweaveKit
+      - target: ClueweaveWatch     # embedded → one App Store record for both
+    info:
+      path: Support/Info-iOS.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        UILaunchScreen: {}            # system launch screen, brand bg applied in-app
+        UIApplicationSceneManifest:   # single window; the save store is one blob
+          UIApplicationSupportsMultipleScenes: false
+        CFBundleURLTypes:             # clueweave://p/<token> imports a shared puzzle
+          - CFBundleURLName: com.clueweave.app
+            CFBundleURLSchemes: [clueweave]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false   # no custom crypto → no export docs
+        LSApplicationCategoryType: public.app-category.puzzle-games
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  ClueweaveWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - Apps/Watch
+      - path: Support/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: ClueweaveKit
+    info:
+      path: Support/Info-Watch.plist
+      properties:
+        CFBundleDisplayName: Clueweave
+        WKApplication: true             # single-target watch app
+        WKCompanionAppBundleIdentifier: com.clueweave.app
+        WKRunsIndependentlyOfCompanionApp: true   # installs & runs without the phone
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clueweave.app.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
